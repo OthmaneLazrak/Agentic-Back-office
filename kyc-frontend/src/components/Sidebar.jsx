@@ -5,11 +5,15 @@ import logo from '../assets/logo_awb.jpg';
 
 const NAV_MAIN = [
   { id: "dashboard",  icon: "▦", label: "Dashboard" },
-  { id: "kyc",        icon: "◈", label: "KYC Verification" },
+  { id: "kyc",        icon: "◈", label: "Front Office", roles: ["FRONT_OFFICE"] },
+  { id: "backoffice", icon: "▣", label: "Back Office", roles: ["BACK_OFFICE"] },
 ];
 
 
-export default function Sidebar({ activePage, setActivePage }) {
+export default function Sidebar({ activePage, setActivePage, userRole = "FRONT_OFFICE" }) {
+  const visibleNav = NAV_MAIN.filter((item) => !item.roles || item.roles.includes(userRole));
+  const roleLabel = userRole === "BACK_OFFICE" ? "Back Office" : "Front Office";
+
   return (
     <aside className="sidebar">
           <div className="sidebar-logo">
@@ -26,7 +30,7 @@ export default function Sidebar({ activePage, setActivePage }) {
 
       <div className="sidebar-section">
         <div className="sidebar-section-label">Main Menu</div>
-        {NAV_MAIN.map((item) => (
+        {visibleNav.map((item) => (
           <div
             key={item.id}
             className={`nav-item ${activePage === item.id ? "active" : ""}`}
@@ -45,6 +49,7 @@ export default function Sidebar({ activePage, setActivePage }) {
         <div className="user-avatar">OL</div>
         <div>
           <div className="user-name">Othmane Lazrek</div>
+          <div className="user-role">{roleLabel}</div>
         </div>
       </div>
     </aside>

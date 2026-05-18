@@ -83,16 +83,27 @@ def _charger_modele_justif_qwen():
             raise FileNotFoundError(f"Dossier LoRA introuvable : {CHEMIN_MODELE_QWEN_LORA}")
 
         print(f"[Extractor] Chargement de Qwen2-VL + LoRA sur {_device}...")
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16
-        )
+        model_kwargs = {}
+
+        if _device == "cuda":
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16
+            )
+            model_kwargs = {
+                "quantization_config": bnb_config,
+                "device_map": "auto",
+            }
+        else:
+            print("[Extractor] CPU détecté : chargement sans quantization bitsandbytes.")
+            model_kwargs = {
+                "torch_dtype": torch.float32,
+            }
 
         base_model = Qwen2VLForConditionalGeneration.from_pretrained(
             "Qwen/Qwen2-VL-2B-Instruct",
-            quantization_config=bnb_config,
-            device_map="auto"
+            **model_kwargs
         )
 
         # Greffe du cerveau LoRA

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { AWB } from "../constants/Theme.jsx";
+import { AWB, API_BASE } from "../constants/Theme.jsx";
 
 // ─────────────────────── Inline icons ───────────────────────
 const Icon = ({ children, size = 16, color = "currentColor", style }) => (
@@ -39,7 +39,7 @@ const NOTIFICATIONS = [
   { id: 4, kind: "warning", title: "CIN proche expiration · #8412", meta: "il y a 1 h",    unread: false },
 ];
 
-function NotificationsMenu({ onClose }) {
+function NotificationsMenu({ onClose, notifications = [] }) {
   const ref = useRef();
   useClickOutside(ref, onClose);
   return (
@@ -49,12 +49,18 @@ function NotificationsMenu({ onClose }) {
         <button className="tb-popover-action">Tout marquer lu</button>
       </div>
       <div className="tb-popover-list">
-        {NOTIFICATIONS.map((n) => (
-          <div key={n.id} className={`tb-notif ${n.unread ? "unread" : ""}`}>
-            <span className={`tb-notif-dot ${n.kind}`} />
+        {notifications.length === 0 && (
+          <div className="tb-notif">
+            <span className="tb-notif-dot info" />
+            <div className="tb-notif-title">Aucun dossier escaladé</div>
+          </div>
+        )}
+        {notifications.map((n) => (
+          <div key={n.id} className="tb-notif unread">
+            <span className="tb-notif-dot warning" />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="tb-notif-title">{n.title}</div>
-              <div className="tb-notif-meta">{n.meta}</div>
+              <div className="tb-notif-meta">{n.motif}</div>
             </div>
           </div>
         ))}
@@ -64,23 +70,36 @@ function NotificationsMenu({ onClose }) {
 }
 
 // ─────────────────────── User menu ───────────────────────
-function UserMenu({ onClose }) {
+function UserMenu({ onClose, userRole, users = [], selectedUser, onSelectUser }) {
   const ref = useRef();
   useClickOutside(ref, onClose);
+  const roleLabel = userRole === "BACK_OFFICE" ? "Back Office" : "Front Office";
+
+  const changeUser = (user) => {
+    onSelectUser(user);
+    onClose();
+  };
+
   return (
     <div className="tb-popover user" ref={ref} role="menu">
       <div className="tb-user-head">
         <div className="tb-user-head-avatar">OL</div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: AWB.navy }}>Othmane Lazrek</div>
-          <div style={{ fontSize: 11, color: AWB.slate500, marginTop: 1 }}>Superviseur KYC</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: AWB.navy }}>{selectedUser?.fullName || "Utilisateur"}</div>
+          <div style={{ fontSize: 11, color: AWB.slate500, marginTop: 1 }}>{roleLabel}</div>
         </div>
       </div>
       <div className="tb-user-items">
-        <button className="tb-user-item">
-          <IconUser size={14} color={AWB.slate600} />
-          Mon profil
-        </button>
+        {users.map((user) => (
+          <button
+            key={user.id}
+            className={`tb-user-item ${selectedUser?.id === user.id ? "selected" : ""}`}
+            onClick={() => changeUser(user)}
+          >
+            {user.type === "BACK_OFFICE" ? <IconInbox size={14} color={AWB.slate600} /> : <IconUser size={14} color={AWB.slate600} />}
+            {user.fullName} · {user.type === "BACK_OFFICE" ? "Back" : "Front"}
+          </button>
+        ))}
       </div>
       <div className="tb-user-foot">
         <button className="tb-user-item danger">
@@ -93,10 +112,38 @@ function UserMenu({ onClose }) {
 }
 
 // ─────────────────────── Topbar ───────────────────────
-export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "" }) {
+export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "", userRole = "FRONT_OFFICE", users = [], selectedUser, onSelectUser = () => {} }) {
   const [openMenu, setOpenMenu] = useState(null);
-  const unread = NOTIFICATIONS.filter((n) => n.unread).length;
+  const [notifications, setNotifications] = useState([]);
+  const unread = notifications.length;
   const toggle = (k) => setOpenMenu((cur) => (cur === k ? null : k));
+  const roleLabel = userRole === "BACK_OFFICE" ? "Back Office" : "Front Office";
+
+  useEffect(() => {
+    if (userRole !== "BACK_OFFICE") {
+      setNotifications([]);
+      return;
+    }
+
+    let cancelled = false;
+    const loadNotifications = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/kyc/dashboard?range=14`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setNotifications(data.notifications || []);
+      } catch {
+        if (!cancelled) setNotifications([]);
+      }
+    };
+
+    loadNotifications();
+    const timer = setInterval(loadNotifications, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [userRole]);
 
   return (
     <div className="topbar">
@@ -112,8 +159,25 @@ export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "" })
         {/* Pending dossiers — operational signal */}
         
 
-        {/* Notifications */}
-        
+        {userRole === "BACK_OFFICE" && (
+          <div className="tb-menu-wrap">
+            <button
+              className={`tb-icon-btn ${openMenu === "notif" ? "active" : ""}`}
+              onClick={() => toggle("notif")}
+              aria-label="Notifications Back Office"
+            >
+              <IconBell size={16} />
+              {unread > 0 && <span className="tb-badge">{unread}</span>}
+            </button>
+            {openMenu === "notif" && (
+              <NotificationsMenu
+                onClose={() => setOpenMenu(null)}
+                notifications={notifications}
+              />
+            )}
+          </div>
+        )}
+
         {/* User */}
         <div className="tb-menu-wrap">
           <button
@@ -123,11 +187,20 @@ export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "" })
           >
             <div className="topbar-avatar">OL</div>
             <div className="tb-user-text">
-              <div className="topbar-username">Othmane Lazrek</div>
+              <div className="topbar-username">{selectedUser?.fullName || "Utilisateur"}</div>
+              <div className="topbar-role">{roleLabel}</div>
             </div>
             <IconChevDown size={12} color={AWB.slate500} />
           </button>
-          {openMenu === "user" && <UserMenu onClose={() => setOpenMenu(null)} />}
+          {openMenu === "user" && (
+            <UserMenu
+              onClose={() => setOpenMenu(null)}
+              userRole={userRole}
+              users={users}
+              selectedUser={selectedUser}
+              onSelectUser={onSelectUser}
+            />
+          )}
         </div>
       </div>
     </div>

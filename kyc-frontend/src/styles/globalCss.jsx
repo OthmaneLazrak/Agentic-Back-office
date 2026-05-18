@@ -439,6 +439,11 @@ export const GLOBAL_CSS = `
     text-align: left;
   }
   .tb-user-item:hover { background: ${AWB.slate50}; }
+  .tb-user-item.selected {
+    background: ${AWB.goldLight};
+    color: ${AWB.navy};
+    font-weight: 600;
+  }
   .tb-user-item.danger { color: ${AWB.danger}; }
   .tb-user-item.danger:hover { background: ${AWB.dangerSoft}; }
 
@@ -1001,6 +1006,90 @@ export const GLOBAL_CSS = `
     overflow-y: auto;
     padding-right: 4px;
   }
+
+  /* ─────────────────────── Back Office ─────────────────────── */
+  .bo-root {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .bo-grid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 0.95fr 1.45fr;
+    gap: 18px;
+  }
+  .bo-list-card,
+  .bo-detail-card {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .bo-list {
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+  }
+  .bo-list-item {
+    width: 100%;
+    border: 1px solid ${AWB.slate200};
+    background: ${AWB.slate50};
+    border-radius: 8px;
+    padding: 11px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.2s ease;
+  }
+  .bo-list-item:hover {
+    background: white;
+    border-color: ${AWB.slate300};
+  }
+  .bo-list-item.active {
+    background: white;
+    border-color: ${AWB.gold};
+    box-shadow: 0 0 0 3px rgba(245,168,0,0.12);
+  }
+  .bo-list-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: ${AWB.navy};
+    line-height: 1.35;
+  }
+  .bo-list-meta {
+    font-size: 11px;
+    color: ${AWB.slate500};
+    margin-top: 3px;
+  }
+  .bo-empty {
+    border: 1px dashed ${AWB.slate300};
+    border-radius: 10px;
+    background: ${AWB.slate50};
+    color: ${AWB.slate500};
+    font-size: 12.5px;
+    padding: 24px;
+    text-align: center;
+  }
+  .bo-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .bo-detail-card .agent-report {
+    max-height: 190px;
+  }
+
   .kpi-card { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
   .kpi-label {
     font-size: 10px; font-weight: 600;

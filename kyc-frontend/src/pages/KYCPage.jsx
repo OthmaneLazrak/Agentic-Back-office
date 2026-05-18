@@ -485,7 +485,7 @@ function VerificationCard({ checks, errors }) {
 }
 
 // ─────────────────────── DecisionCard ───────────────────────
-function DecisionCard({ result, dossierId, statutDecision, setStatutDecision }) {
+function DecisionCard({ result, dossierId, statutDecision, setStatutDecision, userRole = "FRONT_OFFICE", selectedUser }) {
   const [loadingAction, setLoadingAction] = useState(false);
 
   const callDecision = async (action, motif = null) => {
@@ -495,7 +495,7 @@ function DecisionCard({ result, dossierId, statutDecision, setStatutDecision }) 
       await fetch(`${API_BASE}/kyc/dossiers/${dossierId}/${action}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ motif }),
+        body: JSON.stringify({ motif, actorRole: userRole, actorUserId: selectedUser?.id ?? null }),
       });
       setStatutDecision(action);
     } catch (e) {
@@ -662,7 +662,7 @@ function AIEmptyState() {
 }
 
 // ─────────────────────── Main KYCPage ───────────────────────
-export default function KYCPage() {
+export default function KYCPage({ userRole = "FRONT_OFFICE", selectedUser }) {
   // Hydrate from localStorage on first render.
   const initial = readPersisted() || {};
 
@@ -746,6 +746,9 @@ export default function KYCPage() {
     const formData = new FormData();
     formData.append("file",   file);
     formData.append("justif", fileJustif);
+    if (selectedUser?.id != null) {
+      formData.append("actorUserId", String(selectedUser.id));
+    }
 
     try {
       const res = await fetch(`${API_BASE}/kyc/analyze`, {
@@ -869,6 +872,8 @@ export default function KYCPage() {
                   dossierId={dossierId}
                   statutDecision={statutDecision}
                   setStatutDecision={setStatutDecision}
+                  userRole={userRole}
+                  selectedUser={selectedUser}
                 />
               </>
             )}

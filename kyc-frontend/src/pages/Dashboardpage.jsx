@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import { AWB } from "../constants/Theme.jsx";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { AWB, API_BASE } from "../constants/Theme.jsx";
 
 // ─────────────────────── Inline SVG icons ───────────────────────
 const Icon = ({ children, size = 16, color = "currentColor", style }) => (
@@ -80,13 +80,14 @@ function timeAgo(date) {
 
 // ─────────────────────── Sparkline ───────────────────────
 function Sparkline({ data, color = AWB.gold, height = 36 }) {
+  const safeData = data?.length ? data : [0, 0];
   const w = 120;
   const h = height;
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data, 0);
+  const max = Math.max(...safeData, 1);
+  const min = Math.min(...safeData, 0);
   const range = max - min || 1;
-  const step = w / (data.length - 1);
-  const points = data.map((v, i) => {
+  const step = w / (safeData.length - 1);
+  const points = safeData.map((v, i) => {
     const x = i * step;
     const y = h - ((v - min) / range) * (h - 6) - 3;
     return [x, y];
@@ -253,13 +254,14 @@ function genDossier(id) {
 }
 
 function statusBadge(status) {
+  const normalized = String(status || "").toLowerCase();
   const map = {
     approved:  { cls: "badge-approved", label: "Approuvé",  Icon: IconCheck },
     pending:   { cls: "badge-pending",  label: "En attente",Icon: IconClock },
     rejected:  { cls: "badge-rejected", label: "Rejeté",    Icon: IconX },
     escalated: { cls: "badge-info",     label: "Escaladé",  Icon: IconAlert },
   };
-  const m = map[status];
+  const m = map[normalized] || map.pending;
   return (
     <span className={`badge ${m.cls}`}>
       <m.Icon size={11} />
@@ -268,70 +270,66 @@ function statusBadge(status) {
   );
 }
 
+function iconForKind(kind) {
+  if (kind === "success") return IconCheck;
+  if (kind === "danger") return IconX;
+  if (kind === "warning") return IconAlert;
+  return IconUpload;
+}
+
+function dossierName(dossier) {
+  return `${dossier.nom || ""} ${dossier.prenom || ""}`.trim() || "Client non identifié";
+}
+
 export default function DashboardPage() {
   const [range, setRange] = useState(14);
   const [selectedKpi, setSelectedKpi] = useState(null);
-  const [tick, setTick] = useState(0);
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState(null);
 
-  // KPI values shift slightly every 6s so the UI feels alive
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/kyc/dashboard?range=${range}`);
+      if (!res.ok) throw new Error("Dashboard indisponible");
+      setStats(await res.json());
+      setError(null);
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [range]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  useInterval(loadStats, 5000);
+
   const kpis = useMemo(() => KPI_TEMPLATE.map((k) => {
-    const drift = (tick % 6) * (k.key === "alerts" ? 0.5 : 1);
+    const values = {
+      traites: stats?.processed ?? 0,
+      pending: (stats?.pending ?? 0) + (stats?.escalated ?? 0),
+      approval: stats?.approvalRate ?? 0,
+      alerts: stats?.alerts ?? 0,
+    };
     return {
       ...k,
-      value: Math.max(0, k.base + Math.round(Math.sin(tick * 0.4) * k.variance) + drift),
-      series: genSeries(14, k.base, k.variance),
-      delta: k.key === "approval" ? "+2%" : k.key === "alerts" ? "+1" : k.key === "pending" ? "-3" : "+12%",
-      deltaKind: k.key === "alerts" ? "down" : k.key === "pending" ? "up" : "up",
+      value: values[k.key],
+      series: (stats?.series || []).map((p) => p.value),
+      delta: "Base réelle",
+      deltaKind: "flat",
     };
-  }), [tick]);
+  }), [stats]);
 
-  // Chart data
   const chartData = useMemo(() => {
-    const arr = genSeries(range, 60, 25);
-    const labels = Array.from({ length: range }, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (range - 1 - i));
-      return `${d.getDate()}/${d.getMonth() + 1}`;
-    });
-    return { values: arr, labels };
-  }, [range, tick]);
+    const series = stats?.series || [];
+    return {
+      values: series.map((p) => p.value),
+      labels: series.map((p) => p.label),
+    };
+  }, [stats]);
 
-  // Activity feed — live updates
-  const [feed, setFeed] = useState(() =>
-    Array.from({ length: 6 }, (_, i) => {
-      const t = EVENT_TEMPLATES[i % EVENT_TEMPLATES.length];
-      const id = 8000 + Math.floor(Math.random() * 1000);
-      return {
-        id: `${Date.now()}-${i}`,
-        kind: t.kind, Icon: t.icon, agent: t.agent,
-        title: t.title.replace("{id}", id),
-        at: new Date(Date.now() - i * 60000),
-        isNew: false,
-      };
-    })
-  );
-
-  useInterval(() => {
-    setTick((x) => x + 1);
-    setFeed((prev) => {
-      const t = EVENT_TEMPLATES[Math.floor(Math.random() * EVENT_TEMPLATES.length)];
-      const id = 8000 + Math.floor(Math.random() * 1000);
-      const next = [{
-        id: `${Date.now()}`,
-        kind: t.kind, Icon: t.icon, agent: t.agent,
-        title: t.title.replace("{id}", id),
-        at: new Date(),
-        isNew: true,
-      }, ...prev.map((e) => ({ ...e, isNew: false }))];
-      return next.slice(0, 8);
-    });
-  }, 5000);
-
-  // Dossiers
-  const dossiers = useMemo(() =>
-    Array.from({ length: 6 }, (_, i) => genDossier(9100 - i)),
-    [tick]
-  );
+  const feed = stats?.recentActivity || [];
+  const dossiers = stats?.latestDossiers || [];
 
   return (
     <div className="dash-root">
@@ -342,9 +340,10 @@ export default function DashboardPage() {
         </div>
         <span className="live-pill">
           <span className="live-dot" />
-          Mise à jour en direct
+          Données PostgreSQL
         </span>
       </div>
+      {error && <div className="error-item">{error}</div>}
 
       {/* ── KPI row ── */}
       <div className="dash-grid dash-row-kpi" style={{ marginBottom: 16 }}>
@@ -404,17 +403,20 @@ export default function DashboardPage() {
             </span>
           </div>
           <div className="feed-list" style={{ maxHeight: 260, overflowY: "auto" }}>
-            {feed.map((e) => (
-              <div key={e.id} className={`feed-item ${e.isNew ? "new" : ""}`}>
+            {feed.length === 0 && <div className="bo-empty">Aucune activité enregistrée.</div>}
+            {feed.map((e) => {
+              const EventIcon = iconForKind(e.kind);
+              return (
+              <div key={e.id} className="feed-item">
                 <div className={`feed-dot ${e.kind}`}>
-                  <e.Icon size={14} />
+                  <EventIcon size={14} />
                 </div>
                 <div className="feed-content">
                   <div className="feed-title">{e.title}</div>
-                  <div className="feed-meta">{e.agent} · {timeAgo(e.at)}</div>
+                  <div className="feed-meta">{e.agent} · {timeAgo(new Date(e.created_at))}</div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         </div>
       </div>
@@ -442,13 +444,18 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
+              {dossiers.length === 0 && (
+                <tr>
+                  <td colSpan="4" style={{ color: AWB.slate500 }}>Aucun dossier en base.</td>
+                </tr>
+              )}
               {dossiers.map((d) => (
                 <tr key={d.id}>
                   <td className="doss-id">#{d.id}</td>
-                  <td>{d.name}</td>
-                  <td>{statusBadge(d.status)}</td>
+                  <td>{dossierName(d)}</td>
+                  <td>{statusBadge(d.statut)}</td>
                   <td style={{ textAlign: "right", color: AWB.slate500, fontSize: 11.5 }}>
-                    {timeAgo(d.at)}
+                    {timeAgo(new Date(d.updated_at || d.created_at))}
                   </td>
                 </tr>
               ))}
@@ -463,17 +470,13 @@ export default function DashboardPage() {
               Alertes AML
             </span>
             <span className="badge badge-rejected" style={{ fontSize: 10 }}>
-              {kpis[3].value} actives
+              {stats?.alerts ?? 0} actives
             </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {[
-              { sev: "high",   title: "Transaction inhabituelle · #8421", desc: "Montant 12× la moyenne client" },
-              { sev: "medium", title: "PEP détecté · #8417",              desc: "Personne politiquement exposée" },
-              { sev: "medium", title: "Adresse à risque · #8412",         desc: "Pays figurant sur liste grise" },
-              { sev: "low",    title: "CIN proche expiration · #8408",    desc: "Expiration < 30 jours" },
-            ].map((a, i) => {
-              const cls = a.sev === "high" ? "danger" : a.sev === "medium" ? "warning" : "info";
+            {(stats?.notifications || []).length === 0 && <div className="bo-empty">Aucune notification Back Office.</div>}
+            {(stats?.notifications || []).map((a, i) => {
+              const cls = "warning";
               return (
                 <div key={i} style={{
                   display: "flex", gap: 12, padding: "10px 12px",
@@ -488,7 +491,7 @@ export default function DashboardPage() {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 500, color: AWB.slate800 }}>{a.title}</div>
-                    <div style={{ fontSize: 11, color: AWB.slate500, marginTop: 2 }}>{a.desc}</div>
+                    <div style={{ fontSize: 11, color: AWB.slate500, marginTop: 2 }}>{a.motif}</div>
                   </div>
                 </div>
               );
