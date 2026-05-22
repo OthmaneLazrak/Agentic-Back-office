@@ -2,198 +2,125 @@ import React, { useState, useRef, useEffect } from "react";
 import { AWB } from "../constants/Theme.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
 import logo from "../assets/logo_awb.jpg";
+import bgImage from "../assets/att.png";
 
 
 const LOGIN_CSS = `
   .login-root {
-    display: grid;
-    grid-template-columns: 55% 45%;
+    position: relative;
     min-height: 100vh;
     height: 100vh;
+    width: 100%;
     overflow: hidden;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background: ${AWB.white};
+    background: ${AWB.navy};
   }
 
-  .login-left {
-    position: relative;
-    background: linear-gradient(160deg, ${AWB.navy} 0%, ${AWB.navyDark} 100%);
-    color: ${AWB.white};
-    padding: 56px 64px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  .login-left::before {
-    content: "";
+  /* ─────────────── Full-screen background photo ───────────────
+     object-fit: cover → l'image remplit toute la surface, sans
+     marges latérales. Le ratio est conservé (pas de déformation) ;
+     un léger crop haut/bas peut survenir si le ratio image ≠ écran. */
+  .login-bg-img {
     position: absolute;
     inset: 0;
-    background-image:
-      radial-gradient(circle at 85% 15%, rgba(245,168,0,0.10) 0%, transparent 45%),
-      radial-gradient(circle at 10% 90%, rgba(245,168,0,0.05) 0%, transparent 50%);
-    pointer-events: none;
-  }
-
-  .login-left > * { position: relative; z-index: 1; }
-
-  .login-logo {
-    display: inline-flex; align-items: center; gap: 12px;
-  }
-  .login-logo-mark {
-    width: 44px; height: 44px;
-    border-radius: 10px;
-    background: ${AWB.white};
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-    overflow: hidden;
-    padding: 4px;
-    box-shadow:
-      0 0 0 1px rgba(245,168,0,0.35),
-      0 4px 10px rgba(0,0,0,0.18);
-  }
-  .login-logo-img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
-    display: block;
-  }
-
-  /* Giant metallic "W" watermark in the background of the left panel —
-     evokes the Attijariwafa Bank brand letter.
-     Selector is .login-left > .login-bg-w (specificity 0,2,0) so it wins
-     against the generic ".login-left > *" rule above. */
-  .login-left > .login-bg-w {
-    position: absolute;
-    right: -60px;
-    bottom: -90px;
-    font-family: 'Inter', system-ui, sans-serif;
-    font-weight: 900;
-    font-size: 520px;
-    line-height: 0.85;
-    letter-spacing: -0.05em;
-    pointer-events: none;
-    user-select: none;
+    object-fit: cover;
+    object-position: center;
     z-index: 0;
-
-    /* Metallic gold gradient — same recipe as before, scaled up */
-    background: linear-gradient(
-      150deg,
-      rgba(138,90,0,0.22)  0%,
-      rgba(201,136,0,0.30) 18%,
-      rgba(245,168,0,0.42) 38%,
-      rgba(255,246,224,0.55) 50%,
-      rgba(245,168,0,0.42) 62%,
-      rgba(201,136,0,0.30) 82%,
-      rgba(107,69,0,0.22)  100%
-    );
-    -webkit-background-clip: text;
-            background-clip: text;
-    -webkit-text-fill-color: transparent;
-            color: transparent;
-
-    text-shadow:
-      0 2px 0 rgba(255,255,255,0.08),
-      0 -2px 0 rgba(0,0,0,0.35),
-      3px 5px 0 rgba(0,0,0,0.25),
-      6px 10px 0 rgba(0,0,0,0.18),
-      0 30px 60px rgba(0,0,0,0.45);
-
-    opacity: 0.85;
   }
-  .login-logo-text {
-    display: flex; flex-direction: column; line-height: 1.15;
-  }
-  .login-logo-brand {
-    font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
-  }
-  .login-logo-tag {
-    font-size: 9.5px; color: ${AWB.gold};
-    text-transform: uppercase; letter-spacing: 2px; font-weight: 500;
-    margin-top: 3px;
+  /* Navy gradient overlay — darkens the photo so the white card always
+     pops, and keeps the brand identity even if the image is light. */
+  .login-bg-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background:
+      linear-gradient(115deg,
+        rgba(13,27,42,0.78) 0%,
+        rgba(13,27,42,0.55) 45%,
+        rgba(13,27,42,0.35) 100%);
+    pointer-events: none;
   }
 
-  .login-hero { max-width: 460px; }
-  .login-hero-eyebrow {
-    font-size: 11px; font-weight: 600; letter-spacing: 2.2px;
-    color: ${AWB.gold}; text-transform: uppercase;
-    margin-bottom: 14px;
+  /* ─────────────── Floating login card (right side) ─────────────── */
+  .login-stage {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 8vw 0 4vw;
   }
-  .login-hero-title {
-    font-size: 36px; font-weight: 600; line-height: 1.15;
-    letter-spacing: -0.025em;
-    margin-bottom: 18px;
-  }
-  .login-hero-bar {
-    width: 56px; height: 4px;
-    background: ${AWB.gold};
-    border-radius: 2px;
-    margin-bottom: 22px;
-  }
-  .login-hero-lead {
-    font-size: 15px; line-height: 1.6;
-    color: ${AWB.slate200};
-    margin-bottom: 30px;
-    font-weight: 400;
-  }
-
-  .login-features {
-    display: flex; flex-direction: column; gap: 14px;
-  }
-  .login-feature {
-    display: flex; align-items: center; gap: 12px;
-    font-size: 13.5px; color: rgba(255,255,255,0.85);
-    font-weight: 400;
-  }
-  .login-feature-dot {
-    width: 6px; height: 6px;
-    background: ${AWB.gold};
-    border-radius: 2px;
-    flex-shrink: 0;
-    transform: rotate(45deg);
-  }
-
-  .login-foot {
-    font-size: 11.5px;
-    color: rgba(255,255,255,0.45);
-    line-height: 1.6;
-  }
-  .login-foot strong {
-    color: ${AWB.slate200};
-    font-weight: 500;
-    display: block;
-    margin-bottom: 2px;
-  }
-
-  .login-right {
-    background: ${AWB.white};
-    display: flex; align-items: center; justify-content: center;
-    padding: 48px 40px;
-    min-width: 0;
-    overflow-y: auto;
-  }
+  /* Glassmorphism — la carte est quasi transparente, le backdrop-filter
+     floute uniquement ce qui se trouve DERRIÈRE elle (la photo en
+     background). saturate(180%) compense la perte de saturation due
+     au flou et garde les couleurs vivantes. */
   .login-card {
     width: 100%;
     max-width: 420px;
+    background: rgba(255,255,255,0.18);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 14px;
+    padding: 36px 36px 32px;
+    box-shadow:
+      0 30px 60px rgba(0,0,0,0.45),
+      0 12px 24px rgba(0,0,0,0.25),
+      inset 0 1px 0 rgba(255,255,255,0.40);
   }
-  .login-eyebrow {
-    font-size: 10px; font-weight: 600;
-    color: ${AWB.gold};
-    text-transform: uppercase; letter-spacing: 2.2px;
-    margin-bottom: 10px;
+
+  /* Brand chip — top of the card */
+  .login-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 22px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid ${AWB.slate200};
   }
-  .login-title {
-    font-size: 26px; font-weight: 600;
+  .login-brand-mark {
+    width: 38px; height: 38px;
+    border-radius: 8px;
+    background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .login-brand-mark img {
+    width: 100%; height: 100%; object-fit: contain; display: block;
+  }
+  .login-brand-name {
+    font-size: 16px;
+    font-weight: 700;
     color: ${AWB.navy};
-    letter-spacing: -0.02em;
-    margin-bottom: 8px;
+    letter-spacing: -0.015em;
+    line-height: 1.1;
+  }
+  .login-brand-tag {
+    font-size: 11px;
+    color: ${AWB.slate700};
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 3px;
+  }
+
+  .login-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: ${AWB.navy};
+    letter-spacing: -0.025em;
+    margin-bottom: 6px;
   }
   .login-sub {
-    font-size: 13.5px; color: ${AWB.slate500};
+    font-size: 13px;
+    color: ${AWB.slate700};
     line-height: 1.55;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
   }
 
   .login-error {
@@ -201,7 +128,7 @@ const LOGIN_CSS = `
     background: ${AWB.dangerSoft};
     border: 1px solid #FECACA;
     border-radius: 8px;
-    padding: 11px 13px; margin-bottom: 18px;
+    padding: 10px 12px; margin-bottom: 16px;
     font-size: 12.5px; color: ${AWB.danger};
     line-height: 1.5;
     animation: loginShake 0.3s ease-out;
@@ -215,14 +142,13 @@ const LOGIN_CSS = `
 
   .login-field {
     display: flex; flex-direction: column;
-    gap: 7px;
+    gap: 6px;
     margin-bottom: 16px;
   }
   .login-label {
-    font-size: 11px; font-weight: 600;
+    font-size: 11.5px;
+    font-weight: 500;
     color: ${AWB.slate700};
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
   }
   .login-input-wrap {
     position: relative;
@@ -230,21 +156,21 @@ const LOGIN_CSS = `
   }
   .login-input {
     flex: 1; width: 100%;
-    border: 1.5px solid ${AWB.slate200};
+    border: 1px solid ${AWB.slate200};
     background: ${AWB.white};
-    border-radius: 8px;
-    padding: 12px 14px;
+    border-radius: 6px;
+    padding: 11px 13px;
     font-family: 'Inter', sans-serif;
     font-size: 14px;
     color: ${AWB.navy};
     transition: border-color 0.18s ease, box-shadow 0.18s ease;
     outline: none;
   }
-  .login-input.with-toggle { padding-right: 44px; }
+  .login-input.with-toggle { padding-right: 42px; }
   .login-input::placeholder { color: ${AWB.slate400}; }
   .login-input:hover { border-color: ${AWB.slate300}; }
   .login-input:focus {
-    border-color: ${AWB.navy};
+    border-color: ${AWB.gold};
     box-shadow: 0 0 0 3px rgba(245,168,0,0.22);
   }
   .login-input[aria-invalid="true"] {
@@ -258,9 +184,9 @@ const LOGIN_CSS = `
   }
   .login-toggle {
     position: absolute;
-    right: 6px;
+    right: 5px;
     top: 50%; transform: translateY(-50%);
-    width: 34px; height: 34px;
+    width: 32px; height: 32px;
     background: transparent; border: none;
     border-radius: 6px;
     cursor: pointer;
@@ -276,7 +202,7 @@ const LOGIN_CSS = `
 
   .login-row {
     display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 20px;
+    margin-bottom: 22px;
     font-size: 12.5px;
   }
   .login-check {
@@ -325,97 +251,65 @@ const LOGIN_CSS = `
 
   .login-submit {
     width: 100%;
-    background: ${AWB.navy};
-    color: ${AWB.white};
-    border: 1.5px solid ${AWB.navy};
-    border-radius: 8px;
+    background: ${AWB.gold};
+    color: ${AWB.navy};
+    border: none;
+    border-radius: 6px;
     padding: 13px 20px;
     font-family: 'Inter', sans-serif;
-    font-size: 14px; font-weight: 600;
+    font-size: 14.5px; font-weight: 700;
     letter-spacing: 0.02em;
     cursor: pointer;
     transition: all 0.18s ease;
     display: flex; align-items: center; justify-content: center; gap: 10px;
+    box-shadow: 0 6px 16px rgba(245,168,0,0.30);
   }
   .login-submit:hover:not(:disabled) {
-    background: ${AWB.navySoft};
-    border-color: ${AWB.navySoft};
-    box-shadow: 0 6px 18px rgba(13,27,42,0.22);
+    background: ${AWB.goldDark};
+    box-shadow: 0 8px 22px rgba(201,136,0,0.40);
     transform: translateY(-1px);
   }
   .login-submit:active:not(:disabled) { transform: translateY(0); }
   .login-submit:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(245,168,0,0.35);
+    box-shadow: 0 0 0 3px rgba(13,27,42,0.30);
   }
   .login-submit:disabled {
     background: ${AWB.slate200};
-    border-color: ${AWB.slate200};
     color: ${AWB.slate500};
     cursor: not-allowed;
+    box-shadow: none;
   }
   .login-submit-spinner {
     width: 16px; height: 16px;
-    border: 2px solid rgba(255,255,255,0.35);
-    border-top-color: ${AWB.white};
+    border: 2px solid rgba(13,27,42,0.30);
+    border-top-color: ${AWB.navy};
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .login-secure {
-    margin-top: 22px;
+  .login-foot-tls {
+    margin-top: 20px;
     display: flex; align-items: center; gap: 8px;
-    font-size: 11.5px; color: ${AWB.slate500};
+    font-size: 11.5px; color: ${AWB.slate700};
     justify-content: center;
   }
-  .login-secure svg { color: ${AWB.success}; }
+  .login-foot-tls svg { color: ${AWB.success}; }
 
-  .login-divider {
-    display: flex; align-items: center; gap: 10px;
-    color: ${AWB.slate400};
-    font-size: 11px; font-weight: 500;
-    text-transform: uppercase; letter-spacing: 1.5px;
-    margin: 24px 0 14px;
-  }
-  .login-divider::before,
-  .login-divider::after {
-    content: ""; flex: 1; height: 1px;
-    background: ${AWB.slate200};
-  }
-  .login-sso {
-    width: 100%;
-    background: ${AWB.white};
-    color: ${AWB.slate700};
-    border: 1.5px solid ${AWB.slate200};
-    border-radius: 8px;
-    padding: 11px 16px;
-    font-family: 'Inter', sans-serif;
-    font-size: 13px; font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-  }
-  .login-sso:hover {
-    background: ${AWB.slate50};
-    border-color: ${AWB.slate300};
-    color: ${AWB.navy};
-  }
-  .login-sso:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  /* Responsive */
+  /* ─────────────── Responsive ─────────────── */
   @media (max-width: 980px) {
-    .login-root { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: 100vh; }
-    body { overflow: auto; }
-    .login-left { padding: 36px 32px; }
-    .login-hero-title { font-size: 28px; }
-    .login-right { padding: 36px 24px; }
+    .login-stage { justify-content: center; padding: 24px; }
+    .login-card { max-width: 440px; }
+    .login-bg-overlay {
+      background: linear-gradient(180deg,
+        rgba(13,27,42,0.40) 0%,
+        rgba(13,27,42,0.75) 100%);
+    }
   }
   @media (max-width: 560px) {
-    .login-left { padding: 28px 22px; }
-    .login-right { padding: 28px 22px; }
-    .login-hero-title { font-size: 24px; }
-    .login-hero-lead { font-size: 14px; }
+    .login-card { padding: 26px 22px 22px; }
+    .login-title { font-size: 24px; }
   }
 `;
 
@@ -508,43 +402,26 @@ export default function LoginPage() {
     <>
       <style>{LOGIN_CSS}</style>
       <div className="login-root">
-        {/* ──── Panneau gauche : branding institutionnel ──── */}
-        <aside className="login-left">
-          <span className="login-bg-w" aria-hidden="true">W</span>
+        {/* Full-screen background photo + tinted overlay */}
+        <img src={bgImage} alt="" className="login-bg-img" aria-hidden="true" />
+        <div className="login-bg-overlay" aria-hidden="true" />
 
-          <div className="login-logo">
-            <div className="login-logo-mark">
-              <img src={logo} alt="Attijariwafa Bank" className="login-logo-img" />
-            </div>
-            <div className="login-logo-text">
-              <span className="login-logo-brand">Attijariwafa Bank</span>
-              <span className="login-logo-tag">Back-Office KYC</span>
-            </div>
-          </div>
-
-          <div className="login-hero">
-            <div className="login-hero-eyebrow">Direction des risques</div>
-            <h1 className="login-hero-title">
-              Plateforme traitement Back Office<br/>
-            </h1>
-            <div className="login-hero-bar" />
-
-
-          </div>
-
-          <div className="login-foot">
-            <strong>© 2026 Attijariwafa Bank</strong>
-            Environnement réservé aux collaborateurs habilités.
-          </div>
-        </aside>
-
-        {/* ──── Panneau droit : formulaire ──── */}
-        <main className="login-right">
+        {/* Floating login card, right-aligned */}
+        <div className="login-stage">
           <div className="login-card">
-            <div className="login-eyebrow">Connexion sécurisée</div>
-            <h2 className="login-title">Bienvenue.</h2>
+            <div className="login-brand">
+              <div className="login-brand-mark">
+                <img src={logo} alt="" />
+              </div>
+              <div>
+                <div className="login-brand-name">Attijariwafa Bank</div>
+                <div className="login-brand-tag">Back-Office</div>
+              </div>
+            </div>
+
+            <h2 className="login-title">Connexion</h2>
             <p className="login-sub">
-              Connectez-vous avec vos identifiants professionnels pour accéder à votre espace.
+              Bienvenue. Veuillez entrer vos identifiants pour accéder à votre espace.
             </p>
 
             {error && (
@@ -556,7 +433,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} noValidate>
               <div className="login-field">
-                <label className="login-label" htmlFor="login-username">Identifiant</label>
+                <label className="login-label" htmlFor="login-username">Username</label>
                 <div className="login-input-wrap">
                   <input
                     id="login-username"
@@ -575,7 +452,7 @@ export default function LoginPage() {
               </div>
 
               <div className="login-field">
-                <label className="login-label" htmlFor="login-password">Mot de passe</label>
+                <label className="login-label" htmlFor="login-password">Password</label>
                 <div className="login-input-wrap">
                   <input
                     id="login-password"
@@ -640,12 +517,12 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <div className="login-secure">
+            <div className="login-foot-tls">
               <LockIcon />
               <span>Connexion chiffrée TLS · Audit conformité activé</span>
             </div>
           </div>
-        </main>
+        </div>
       </div>
     </>
   );
