@@ -31,18 +31,18 @@ public class KycService {
 
     private final KycDossierRepository repository;
     private final KycUserRepository userRepository;
-    private final PythonKycClient pythonKycClient;
+    private final AiOrchestratorService aiOrchestrator;
     private final Path uploadDir;
 
     public KycService(
             KycDossierRepository repository,
             KycUserRepository userRepository,
-            PythonKycClient pythonKycClient,
+            AiOrchestratorService aiOrchestrator,
             @Value("${kyc.upload-dir}") String uploadDir
     ) {
         this.repository = repository;
         this.userRepository = userRepository;
-        this.pythonKycClient = pythonKycClient;
+        this.aiOrchestrator = aiOrchestrator;
         this.uploadDir = Path.of(uploadDir).toAbsolutePath().normalize();
     }
 
@@ -62,7 +62,7 @@ public class KycService {
             Files.copy(file.getInputStream(), cinPath, StandardCopyOption.REPLACE_EXISTING);
             Files.copy(justif.getInputStream(), justifPath, StandardCopyOption.REPLACE_EXISTING);
 
-            JsonNode result = pythonKycClient.analyze(cinPath, justifPath);
+            JsonNode result = aiOrchestrator.analyze(cinPath, justifPath);
             String decision = text(result.at("/validation/statut"), "INCONNU");
             JsonNode errorsNode = result.at("/validation/erreurs");
             JsonNode details = result.at("/validation/details");
@@ -75,7 +75,10 @@ public class KycService {
             JsonNode dpJustif = details.path("justificatif");
             Integer age = dpCin.path("age_calcule").isNumber() ? dpCin.path("age_calcule").asInt() : null;
 
-            String agentReport = buildAgentReport(decision, result.path("validation"), errorsNode, dpCin, dpJustif);
+            String agentTextFromLlm = text(result.path("agent_text"), "");
+            String agentReport = agentTextFromLlm.isBlank()
+                    ? buildAgentReport(decision, result.path("validation"), errorsNode, dpCin, dpJustif)
+                    : agentTextFromLlm;
             boolean cinOk = "APPROUVE".equals(stripAccents(text(validationCin.path("statut"), "")));
             boolean justifOk = "APPROUVE".equals(stripAccents(text(validationJustif.path("statut"), "")));
             boolean namesOk = "APPROUVE".equals(stripAccents(decision));
@@ -183,6 +186,11 @@ public class KycService {
                 dossier.setHandledByUserId(actor.getId());
                 dossier.setHandledByUserName(fullName(actor));
             }
+            if ("BACK_OFFICE".equals(normalizedRole)) {
+                dossier.setDecisionBackOffice(status);
+                dossier.setMotifBackOffice((motif == null || motif.isBlank()) ? defaultMotif : motif);
+                dossier.setDecidedBackOfficeAt(LocalDateTime.now());
+            }
         }
         repository.save(dossier);
 
@@ -265,6 +273,9 @@ public class KycService {
         response.put("prenom", dossier.getPrenom());
         response.put("cin", dossier.getCin());
         response.put("decision_ia", dossier.getDecisionIa());
+        response.put("decision_back_office", dossier.getDecisionBackOffice());
+        response.put("motif_back_office", dossier.getMotifBackOffice());
+        response.put("decided_back_office_at", dossier.getDecidedBackOfficeAt());
         response.put("statut", dossier.getStatut());
         response.put("motif", dossier.getMotif());
         response.put("agent_report", dossier.getAgentReport());

@@ -1,32 +1,36 @@
 import React from "react";
-import { AWB } from "../constants/Theme.jsx";
-import logo from '../assets/logo_awb.jpg';
-
+import { ROLE_LABEL, ROLES } from "../constants/Theme.jsx";
+import logo from "../assets/logo_awb.jpg";
 
 const NAV_MAIN = [
   { id: "dashboard",  icon: "▦", label: "Dashboard" },
-  { id: "kyc",        icon: "◈", label: "Front Office", roles: ["FRONT_OFFICE"] },
-  { id: "backoffice", icon: "▣", label: "Back Office", roles: ["BACK_OFFICE"] },
+  { id: "kyc",        icon: "◈", label: "Vérification KYC", roles: [ROLES.FRONT_OFFICE] },
+  { id: "backoffice", icon: "▣", label: "Back Office",  roles: [ROLES.BACK_OFFICE] },
+  { id: "admin",      icon: "✪", label: "Administration", roles: [ROLES.ADMIN] },
 ];
 
+function initialsOf(name = "") {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("") || "U";
+}
 
-export default function Sidebar({ activePage, setActivePage, userRole = "FRONT_OFFICE" }) {
+export default function Sidebar({ activePage, setActivePage, userRole = ROLES.FRONT_OFFICE, fullName = "Utilisateur" }) {
   const visibleNav = NAV_MAIN.filter((item) => !item.roles || item.roles.includes(userRole));
-  const roleLabel = userRole === "BACK_OFFICE" ? "Back Office" : "Front Office";
+  const roleLabel = ROLE_LABEL[userRole] || "Utilisateur";
 
   return (
     <aside className="sidebar">
-          <div className="sidebar-logo">
-    <img
-      src={logo}
-      alt="Attijariwafa Bank"
-      className="sidebar-logo-img"
-    />
-    <div>
-      <div className="sidebar-brand">Attijariwafa Bank</div>
-      <div className="sidebar-tagline">Together Everywhere</div>
-    </div>
-  </div>
+      <div className="sidebar-logo">
+        <img src={logo} alt="Attijariwafa Bank" className="sidebar-logo-img" />
+        <div>
+          <div className="sidebar-brand">Attijariwafa Bank</div>
+          <div className="sidebar-tagline">Together Everywhere</div>
+        </div>
+      </div>
 
       <div className="sidebar-section">
         <div className="sidebar-section-label">Main Menu</div>
@@ -43,12 +47,10 @@ export default function Sidebar({ activePage, setActivePage, userRole = "FRONT_O
         ))}
       </div>
 
-
-
       <div className="sidebar-user">
-        <div className="user-avatar">OL</div>
+        <div className="user-avatar">{initialsOf(fullName)}</div>
         <div>
-          <div className="user-name">Othmane Lazrek</div>
+          <div className="user-name">{fullName}</div>
           <div className="user-role">{roleLabel}</div>
         </div>
       </div>

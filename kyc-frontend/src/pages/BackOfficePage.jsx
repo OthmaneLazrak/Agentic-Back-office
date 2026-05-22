@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { AWB, API_BASE } from "../constants/Theme.jsx";
+import { AWB } from "../constants/Theme.jsx";
+import api from "../auth/apiClient.js";
 
 const Icon = ({ children, size = 16, color = "currentColor" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size}
@@ -44,13 +45,12 @@ export default function BackOfficePage({ selectedUser }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/kyc/dossiers?statut=ESCALATED`);
-      if (!res.ok) throw new Error("Impossible de charger les dossiers escaladés.");
-      const data = await res.json();
+      const res = await api.get(`/kyc/dossiers`, { params: { statut: "ESCALATED" } });
+      const data = res.data;
       setDossiers(data);
       setSelected((current) => data.find((d) => d.id === current?.id) || data[0] || null);
     } catch (e) {
-      setError(e.message);
+      setError(e?.response?.data?.message || "Impossible de charger les dossiers escaladés.");
     } finally {
       setLoading(false);
     }
@@ -70,18 +70,10 @@ export default function BackOfficePage({ selectedUser }) {
 
     setActionLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/kyc/dossiers/${selected.id}/${action}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ motif, actorRole: "BACK_OFFICE", actorUserId: selectedUser?.id ?? null }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Décision non enregistrée.");
-      }
+      await api.patch(`/kyc/dossiers/${selected.id}/${action}`, { motif });
       await loadEscalated();
     } catch (e) {
-      setError(e.message);
+      setError(e?.response?.data?.detail || e?.response?.data?.message || "Décision non enregistrée.");
     } finally {
       setActionLoading(false);
     }

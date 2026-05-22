@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { AWB, API_BASE } from "../constants/Theme.jsx";
+import { AWB } from "../constants/Theme.jsx";
+import api from "../auth/apiClient.js";
 
 // ─────────────────────── Persistent state helper ───────────────────────
 const STORAGE_KEY = "awb.kyc.state.v1";
@@ -492,11 +493,7 @@ function DecisionCard({ result, dossierId, statutDecision, setStatutDecision, us
     if (!dossierId) return;
     setLoadingAction(true);
     try {
-      await fetch(`${API_BASE}/kyc/dossiers/${dossierId}/${action}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ motif, actorRole: userRole, actorUserId: selectedUser?.id ?? null }),
-      });
+      await api.patch(`/kyc/dossiers/${dossierId}/${action}`, { motif });
       setStatutDecision(action);
     } catch (e) {
       console.error(e);
@@ -746,25 +743,16 @@ export default function KYCPage({ userRole = "FRONT_OFFICE", selectedUser }) {
     const formData = new FormData();
     formData.append("file",   file);
     formData.append("justif", fileJustif);
-    if (selectedUser?.id != null) {
-      formData.append("actorUserId", String(selectedUser.id));
-    }
 
     try {
-      const res = await fetch(`${API_BASE}/kyc/analyze`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Erreur serveur");
-      }
-      const data = await res.json();
+      const res = await api.post(`/kyc/analyze`, formData);
+      const data = res.data;
       setResult(data);
       setDossierId(data.dossier_id);
       setStep(3);
     } catch (e) {
-      setError(e.message);
+      const msg = e?.response?.data?.detail || e?.response?.data?.message || e.message || "Erreur serveur";
+      setError(msg);
       setStep(1);
     } finally {
       setLoading(false);

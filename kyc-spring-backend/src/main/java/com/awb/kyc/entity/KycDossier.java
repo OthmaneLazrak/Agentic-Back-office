@@ -27,6 +27,15 @@ public class KycDossier {
     @Column(name = "decision_ia")
     private String decisionIa;
 
+    @Column(name = "decision_back_office")
+    private String decisionBackOffice;
+
+    @Column(name = "motif_back_office", columnDefinition = "text")
+    private String motifBackOffice;
+
+    @Column(name = "decided_back_office_at")
+    private LocalDateTime decidedBackOfficeAt;
+
     private String statut = "PENDING";
 
     @Column(columnDefinition = "text")
@@ -123,6 +132,30 @@ public class KycDossier {
 
     public void setDecisionIa(String decisionIa) {
         this.decisionIa = decisionIa;
+    }
+
+    public String getDecisionBackOffice() {
+        return decisionBackOffice;
+    }
+
+    public void setDecisionBackOffice(String decisionBackOffice) {
+        this.decisionBackOffice = decisionBackOffice;
+    }
+
+    public String getMotifBackOffice() {
+        return motifBackOffice;
+    }
+
+    public void setMotifBackOffice(String motifBackOffice) {
+        this.motifBackOffice = motifBackOffice;
+    }
+
+    public LocalDateTime getDecidedBackOfficeAt() {
+        return decidedBackOfficeAt;
+    }
+
+    public void setDecidedBackOfficeAt(LocalDateTime decidedBackOfficeAt) {
+        this.decidedBackOfficeAt = decidedBackOfficeAt;
     }
 
     public String getStatut() {

@@ -1,8 +1,11 @@
 package com.awb.kyc.controller;
 
 import com.awb.kyc.dto.DecisionRequest;
+import com.awb.kyc.entity.KycUser;
+import com.awb.kyc.service.AuthenticatedUserService;
 import com.awb.kyc.service.KycService;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,9 +23,11 @@ import java.util.Map;
 public class KycController {
 
     private final KycService kycService;
+    private final AuthenticatedUserService authenticatedUserService;
 
-    public KycController(KycService kycService) {
+    public KycController(KycService kycService, AuthenticatedUserService authenticatedUserService) {
         this.kycService = kycService;
+        this.authenticatedUserService = authenticatedUserService;
     }
 
     @GetMapping("/")
@@ -31,57 +36,54 @@ public class KycController {
     }
 
     @PostMapping(value = "/kyc/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('FRONT_OFFICE')")
     public Map<String, Object> analyzeDocument(
             @RequestPart("file") MultipartFile file,
-            @RequestPart("justif") MultipartFile justif,
-            @RequestPart(value = "actorUserId", required = false) String actorUserId
+            @RequestPart("justif") MultipartFile justif
     ) {
-        return kycService.analyze(file, justif, parseLong(actorUserId));
+        KycUser actor = authenticatedUserService.syncAndGetCurrentUser();
+        return kycService.analyze(file, justif, actor.getId());
     }
 
     @GetMapping("/users")
+    @PreAuthorize("hasAnyRole('ADMIN','FRONT_OFFICE','BACK_OFFICE')")
     public List<Map<String, Object>> listUsers() {
         return kycService.listUsers();
     }
 
     @GetMapping("/kyc/dossiers")
+    @PreAuthorize("hasAnyRole('ADMIN','FRONT_OFFICE','BACK_OFFICE')")
     public List<Map<String, Object>> listDossiers(@RequestParam(required = false) String statut) {
         return kycService.listDossiers(statut);
     }
 
     @GetMapping("/kyc/dashboard")
+    @PreAuthorize("hasAnyRole('ADMIN','FRONT_OFFICE','BACK_OFFICE')")
     public Map<String, Object> dashboard(@RequestParam(defaultValue = "14") int range) {
         return kycService.dashboardStats(range);
     }
 
     @PatchMapping("/kyc/dossiers/{id}/approuver")
+    @PreAuthorize("hasAnyRole('FRONT_OFFICE','BACK_OFFICE')")
     public Map<String, Object> approuver(@PathVariable Long id, @RequestBody(required = false) DecisionRequest body) {
+        KycUser actor = authenticatedUserService.syncAndGetCurrentUser();
         String motif = body == null ? null : body.getMotif();
-        String actorRole = body == null ? null : body.getActorRole();
-        Long actorUserId = body == null ? null : body.getActorUserId();
-        return kycService.updateStatus(id, "APPROVED", "Approuvé manuellement par l'opérateur", motif, false, actorRole, actorUserId);
+        return kycService.updateStatus(id, "APPROVED", "Approuvé manuellement par l'opérateur", motif, false, actor.getType(), actor.getId());
     }
 
     @PatchMapping("/kyc/dossiers/{id}/rejeter")
+    @PreAuthorize("hasAnyRole('FRONT_OFFICE','BACK_OFFICE')")
     public Map<String, Object> rejeter(@PathVariable Long id, @RequestBody(required = false) DecisionRequest body) {
+        KycUser actor = authenticatedUserService.syncAndGetCurrentUser();
         String motif = body == null ? null : body.getMotif();
-        String actorRole = body == null ? null : body.getActorRole();
-        Long actorUserId = body == null ? null : body.getActorUserId();
-        return kycService.updateStatus(id, "REJECTED", null, motif, true, actorRole, actorUserId);
+        return kycService.updateStatus(id, "REJECTED", null, motif, true, actor.getType(), actor.getId());
     }
 
     @PatchMapping("/kyc/dossiers/{id}/escalader")
+    @PreAuthorize("hasRole('FRONT_OFFICE')")
     public Map<String, Object> escalader(@PathVariable Long id, @RequestBody(required = false) DecisionRequest body) {
+        KycUser actor = authenticatedUserService.syncAndGetCurrentUser();
         String motif = body == null ? null : body.getMotif();
-        String actorRole = body == null ? null : body.getActorRole();
-        Long actorUserId = body == null ? null : body.getActorUserId();
-        return kycService.updateStatus(id, "ESCALATED", "Escaladé pour révision manuelle", motif, false, actorRole, actorUserId);
-    }
-
-    private Long parseLong(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return Long.parseLong(value);
+        return kycService.updateStatus(id, "ESCALATED", "Escaladé pour révision manuelle", motif, false, actor.getType(), actor.getId());
     }
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { AWB, API_BASE } from "../constants/Theme.jsx";
+import { AWB } from "../constants/Theme.jsx";
+import api from "../auth/apiClient.js";
 
 // ─────────────────────── Inline SVG icons ───────────────────────
 const Icon = ({ children, size = 16, color = "currentColor", style }) => (
@@ -289,12 +290,11 @@ export default function DashboardPage() {
 
   const loadStats = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/kyc/dashboard?range=${range}`);
-      if (!res.ok) throw new Error("Dashboard indisponible");
-      setStats(await res.json());
+      const res = await api.get(`/kyc/dashboard`, { params: { range } });
+      setStats(res.data);
       setError(null);
     } catch (e) {
-      setError(e.message);
+      setError(e?.response?.data?.message || "Dashboard indisponible");
     }
   }, [range]);
 
@@ -340,7 +340,7 @@ export default function DashboardPage() {
         </div>
         <span className="live-pill">
           <span className="live-dot" />
-          Données PostgreSQL
+          Données Actives
         </span>
       </div>
       {error && <div className="error-item">{error}</div>}

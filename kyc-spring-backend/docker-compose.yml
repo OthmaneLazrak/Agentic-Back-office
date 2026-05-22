@@ -11,5 +11,23 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: awb-kyc-keycloak
+    command:
+      - start-dev
+      - --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/awb-kyc-realm.json:/opt/keycloak/data/import/awb-kyc-realm.json:ro
+      - keycloak_data:/opt/keycloak/data
+
 volumes:
   postgres_data:
+  keycloak_data:

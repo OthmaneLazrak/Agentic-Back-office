@@ -96,9 +96,20 @@ def _charger_modele_justif_qwen():
                 "device_map": "auto",
             }
         else:
-            print("[Extractor] CPU détecté : chargement sans quantization bitsandbytes.")
+            # On CPU, default to float32 for stable JSON output from Qwen-VL.
+            # FP16/BF16 reduce memory by ~50% but degrade generation quality.
+            # Override via env var: KYC_VLM_DTYPE=fp32 (default) | fp16 | bf16.
+            dtype_choice = os.environ.get("KYC_VLM_DTYPE", "fp32").lower()
+            dtype_map = {
+                "fp32": torch.float32,
+                "fp16": torch.float16,
+                "bf16": torch.bfloat16,
+            }
+            cpu_dtype = dtype_map.get(dtype_choice, torch.float32)
+            print(f"[Extractor] CPU détecté : chargement en {cpu_dtype} (sans bitsandbytes).")
             model_kwargs = {
-                "torch_dtype": torch.float32,
+                "torch_dtype": cpu_dtype,
+                "low_cpu_mem_usage": True,
             }
 
         base_model = Qwen2VLForConditionalGeneration.from_pretrained(

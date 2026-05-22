@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import { AWB, API_BASE } from "../constants/Theme.jsx";
+import { AWB, ROLES } from "../constants/Theme.jsx";
+import api from "../auth/apiClient.js";
+import { useAuth } from "../auth/AuthContext.jsx";
 
 // ─────────────────────── Inline icons ───────────────────────
 const Icon = ({ children, size = 16, color = "currentColor", style }) => (
@@ -14,15 +16,7 @@ const IconBell      = (p) => <Icon {...p}><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-
 const IconChevDown  = (p) => <Icon {...p}><polyline points="6 9 12 15 18 9" /></Icon>;
 const IconLogOut    = (p) => <Icon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></Icon>;
 const IconUser      = (p) => <Icon {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></Icon>;
-const IconInbox     = (p) => <Icon {...p}><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></Icon>;
 
-// ─────────────────────── Environment (in real app, comes from env var / config) ───────────────────────
-const ENVIRONMENT = { code: "REC", label: "Recette", kind: "test" };  // 'prod' | 'test' | 'dev'
-
-// Mock — would come from a server query in real app
-const PENDING_COUNT = 12;
-
-// ─────────────────────── Hook: click outside ───────────────────────
 function useClickOutside(ref, onClose) {
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
@@ -31,13 +25,14 @@ function useClickOutside(ref, onClose) {
   }, [ref, onClose]);
 }
 
-// ─────────────────────── Notifications ───────────────────────
-const NOTIFICATIONS = [
-  { id: 1, kind: "alert",   title: "Alerte AML · Dossier #8421",    meta: "il y a 2 min", unread: true  },
-  { id: 2, kind: "success", title: "Dossier #8417 approuvé",        meta: "il y a 12 min", unread: true  },
-  { id: 3, kind: "info",    title: "Nouveau dossier reçu · #8425",  meta: "il y a 28 min", unread: true  },
-  { id: 4, kind: "warning", title: "CIN proche expiration · #8412", meta: "il y a 1 h",    unread: false },
-];
+function initialsOf(name = "") {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("") || "U";
+}
 
 function NotificationsMenu({ onClose, notifications = [] }) {
   const ref = useRef();
@@ -69,40 +64,28 @@ function NotificationsMenu({ onClose, notifications = [] }) {
   );
 }
 
-// ─────────────────────── User menu ───────────────────────
-function UserMenu({ onClose, userRole, users = [], selectedUser, onSelectUser }) {
+function UserMenu({ onClose, roleLabel, fullName, email, onLogout, onAccount }) {
   const ref = useRef();
   useClickOutside(ref, onClose);
-  const roleLabel = userRole === "BACK_OFFICE" ? "Back Office" : "Front Office";
-
-  const changeUser = (user) => {
-    onSelectUser(user);
-    onClose();
-  };
 
   return (
     <div className="tb-popover user" ref={ref} role="menu">
       <div className="tb-user-head">
-        <div className="tb-user-head-avatar">OL</div>
+        <div className="tb-user-head-avatar">{initialsOf(fullName)}</div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: AWB.navy }}>{selectedUser?.fullName || "Utilisateur"}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: AWB.navy }}>{fullName || "Utilisateur"}</div>
           <div style={{ fontSize: 11, color: AWB.slate500, marginTop: 1 }}>{roleLabel}</div>
+          {email && <div style={{ fontSize: 11, color: AWB.slate400, marginTop: 2 }}>{email}</div>}
         </div>
       </div>
       <div className="tb-user-items">
-        {users.map((user) => (
-          <button
-            key={user.id}
-            className={`tb-user-item ${selectedUser?.id === user.id ? "selected" : ""}`}
-            onClick={() => changeUser(user)}
-          >
-            {user.type === "BACK_OFFICE" ? <IconInbox size={14} color={AWB.slate600} /> : <IconUser size={14} color={AWB.slate600} />}
-            {user.fullName} · {user.type === "BACK_OFFICE" ? "Back" : "Front"}
-          </button>
-        ))}
+        <button className="tb-user-item" onClick={onAccount}>
+          <IconUser size={14} color={AWB.slate600} />
+          Mon compte Keycloak
+        </button>
       </div>
       <div className="tb-user-foot">
-        <button className="tb-user-item danger">
+        <button className="tb-user-item danger" onClick={onLogout}>
           <IconLogOut size={14} />
           Déconnexion
         </button>
@@ -111,32 +94,27 @@ function UserMenu({ onClose, userRole, users = [], selectedUser, onSelectUser })
   );
 }
 
-// ─────────────────────── Topbar ───────────────────────
-export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "", userRole = "FRONT_OFFICE", users = [], selectedUser, onSelectUser = () => {} }) {
+export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "", userRole = ROLES.FRONT_OFFICE, roleLabel = "Utilisateur", fullName = "Utilisateur" }) {
+  const { profile, logout, accountManagement } = useAuth();
   const [openMenu, setOpenMenu] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const unread = notifications.length;
   const toggle = (k) => setOpenMenu((cur) => (cur === k ? null : k));
-  const roleLabel = userRole === "BACK_OFFICE" ? "Back Office" : "Front Office";
 
   useEffect(() => {
-    if (userRole !== "BACK_OFFICE") {
+    if (userRole !== ROLES.BACK_OFFICE) {
       setNotifications([]);
       return;
     }
-
     let cancelled = false;
     const loadNotifications = async () => {
       try {
-        const res = await fetch(`${API_BASE}/kyc/dashboard?range=14`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled) setNotifications(data.notifications || []);
+        const res = await api.get(`/kyc/dashboard?range=14`);
+        if (!cancelled) setNotifications(res.data.notifications || []);
       } catch {
         if (!cancelled) setNotifications([]);
       }
     };
-
     loadNotifications();
     const timer = setInterval(loadNotifications, 5000);
     return () => {
@@ -147,19 +125,13 @@ export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "", u
 
   return (
     <div className="topbar">
-      {/* Left: page title block */}
       <div className="tb-title-block">
         <div className="tb-title">{pageTitle}</div>
         {pageSubtitle && <div className="tb-subtitle">{pageSubtitle}</div>}
       </div>
 
-      
-
       <div className="tb-right">
-        {/* Pending dossiers — operational signal */}
-        
-
-        {userRole === "BACK_OFFICE" && (
+        {userRole === ROLES.BACK_OFFICE && (
           <div className="tb-menu-wrap">
             <button
               className={`tb-icon-btn ${openMenu === "notif" ? "active" : ""}`}
@@ -178,16 +150,15 @@ export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "", u
           </div>
         )}
 
-        {/* User */}
         <div className="tb-menu-wrap">
           <button
             className={`tb-user-trigger ${openMenu === "user" ? "active" : ""}`}
             onClick={() => toggle("user")}
             aria-label="Profil utilisateur"
           >
-            <div className="topbar-avatar">OL</div>
+            <div className="topbar-avatar">{initialsOf(fullName)}</div>
             <div className="tb-user-text">
-              <div className="topbar-username">{selectedUser?.fullName || "Utilisateur"}</div>
+              <div className="topbar-username">{fullName}</div>
               <div className="topbar-role">{roleLabel}</div>
             </div>
             <IconChevDown size={12} color={AWB.slate500} />
@@ -195,10 +166,11 @@ export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "", u
           {openMenu === "user" && (
             <UserMenu
               onClose={() => setOpenMenu(null)}
-              userRole={userRole}
-              users={users}
-              selectedUser={selectedUser}
-              onSelectUser={onSelectUser}
+              roleLabel={roleLabel}
+              fullName={fullName}
+              email={profile?.email}
+              onLogout={() => { setOpenMenu(null); logout(); }}
+              onAccount={() => { setOpenMenu(null); accountManagement(); }}
             />
           )}
         </div>

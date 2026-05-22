@@ -42,4 +42,22 @@ export const AWB = {
   infoSoft:     "#DBEAFE",
 };
 
-export const API_BASE = "http://localhost:8000";
+export const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+
+export const KEYCLOAK_CONFIG = {
+  url: import.meta.env.VITE_KEYCLOAK_URL || "http://localhost:8080",
+  realm: import.meta.env.VITE_KEYCLOAK_REALM || "awb-kyc",
+  clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || "kyc-frontend",
+};
+
+export const ROLES = {
+  ADMIN: "ADMIN",
+  FRONT_OFFICE: "FRONT_OFFICE",
+  BACK_OFFICE: "BACK_OFFICE",
+};
+
+export const ROLE_LABEL = {
+  ADMIN: "Admin",
+  FRONT_OFFICE: "Front Office",
+  BACK_OFFICE: "Back Office",
+};
