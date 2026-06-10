@@ -1,0 +1,36 @@
+{
+    "image": "cheque_7100_cheque_f6aef883-2c5f-45fb-8a4c-99d189083659_cih_cheque_test.jpeg",
+    "donnees_manuscrit": {
+        "extraction_status": "SUCCESS",
+        "montant_chiffre": "3000, -1875 DH",
+        "montant_lettre": "Trente Mille DH",
+        "beneficiaire": "CASA AIN SEBAAA"
+    },
+    "donnees_zones": {
+        "extraction_status": "SUCCESS",
+        "num_compte": {
+            "crop": null,
+            "conf": null,
+            "text": null
+        },
+        "cmc7": {
+            "crop": "C:\\Users\\othmane\\PycharmProjects\\Agent_IA_Back_Office\\cheque_mcp_server\\crops\\cmc7\\cheque_7100_cheque_f6aef883-2c5f-45fb-8a4c-99d189083659_cih_cheque_test__cmc7.png",
+            "conf": 0.438,
+            "text": "800896204292230780*3345698212007500AE9"
+        },
+        "signature": {
+            "crop": "C:\\Users\\othmane\\PycharmProjects\\Agent_IA_Back_Office\\cheque_mcp_server\\crops\\signature\\cheque_7100_cheque_f6aef883-2c5f-45fb-8a4c-99d189083659_cih_cheque_test__signature.png",
+            "conf": 0.683,
+            "present": true,
+            "match": null
+        }
+    },
+    "validation": {
+        "statut": "A VERIFIER MANUELLEMENT",
+        "message": "Numéro de compte non détecté",
+        "erreurs": [
+            "Numéro de compte non détecté"
+        ]
+    },
+    "date_analyse": "2026-06-09 08:54:25"
+}

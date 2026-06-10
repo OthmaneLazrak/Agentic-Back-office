@@ -30,8 +30,8 @@
   },
   "clients": [
     {
-      "clientId": "kyc-frontend",
-      "name": "AWB KYC Frontend (React)",
+      "clientId": "agent-frontend",
+      "name": "AWB Agent Frontend (React)",
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,

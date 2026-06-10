@@ -1,10 +1,13 @@
 package com.awb.kyc.service;
 
+import com.awb.kyc.entity.KycDocument;
 import com.awb.kyc.entity.KycDossier;
 import com.awb.kyc.entity.KycUser;
+import com.awb.kyc.repository.KycDocumentRepository;
 import com.awb.kyc.repository.KycDossierRepository;
 import com.awb.kyc.repository.KycUserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -31,18 +34,24 @@ public class KycService {
 
     private final KycDossierRepository repository;
     private final KycUserRepository userRepository;
+    private final KycDocumentRepository documentRepository;
     private final AiOrchestratorService aiOrchestrator;
+    private final ObjectMapper objectMapper;
     private final Path uploadDir;
 
     public KycService(
             KycDossierRepository repository,
             KycUserRepository userRepository,
+            KycDocumentRepository documentRepository,
             AiOrchestratorService aiOrchestrator,
+            ObjectMapper objectMapper,
             @Value("${kyc.upload-dir}") String uploadDir
     ) {
         this.repository = repository;
         this.userRepository = userRepository;
+        this.documentRepository = documentRepository;
         this.aiOrchestrator = aiOrchestrator;
+        this.objectMapper = objectMapper;
         this.uploadDir = Path.of(uploadDir).toAbsolutePath().normalize();
     }
 
@@ -85,20 +94,6 @@ public class KycService {
             int riskScore = namesOk ? 30 : 68;
             String riskLevel = riskScore < 40 ? "low" : riskScore < 70 ? "medium" : "high";
 
-            KycDossier dossier = new KycDossier();
-            dossier.setFilename(file.getOriginalFilename());
-            dossier.setNom(text(donneesCin.path("nom"), ""));
-            dossier.setPrenom(text(donneesCin.path("prenom"), ""));
-            dossier.setCin(text(donneesCin.path("numero_cin"), ""));
-            dossier.setDecisionIa(decision);
-            dossier.setStatut("PENDING");
-            dossier.setAgentReport(agentReport);
-            dossier.setRiskScore(riskScore);
-            dossier.setCreatedByRole(actor.getType());
-            dossier.setCreatedByUserId(actor.getId());
-            dossier.setCreatedByUserName(fullName(actor));
-            repository.saveAndFlush(dossier);
-
             Map<String, Object> extracted = new LinkedHashMap<>();
             extracted.put("nom", text(donneesCin.path("nom"), ""));
             extracted.put("prenom", text(donneesCin.path("prenom"), ""));
@@ -117,6 +112,36 @@ public class KycService {
             checks.put("fields_complete", check("Complétude des champs", cinOk ? "OK" : "Incomplet", cinOk ? "success" : "error"));
             checks.put("majority_check", check("Majorité (18 ans+)", cinOk ? "OK" : "À vérifier", cinOk ? "success" : "warning"));
             checks.put("nom_match", check("Correspondance Noms", namesOk ? "Concordants" : "Discordants", namesOk ? "success" : "error"));
+
+            // Snapshot complet de l'analyse front-office, resservi tel quel au Back Office à l'escalade.
+            Map<String, Object> analysis = new LinkedHashMap<>();
+            analysis.put("decision", decision);
+            analysis.put("risk_score", riskScore);
+            analysis.put("risk_level", riskLevel);
+            analysis.put("extracted", extracted);
+            analysis.put("extracted_justif", extractedJustif);
+            analysis.put("checks", checks);
+            analysis.put("errors", errorsNode.isArray() ? errorsNode : List.of());
+
+            KycDossier dossier = new KycDossier();
+            dossier.setFilename(file.getOriginalFilename());
+            dossier.setNom(text(donneesCin.path("nom"), ""));
+            dossier.setPrenom(text(donneesCin.path("prenom"), ""));
+            dossier.setCin(text(donneesCin.path("numero_cin"), ""));
+            dossier.setDecisionIa(decision);
+            dossier.setStatut("PENDING");
+            dossier.setAgentReport(agentReport);
+            dossier.setRiskScore(riskScore);
+            dossier.setAnalysisJson(writeJsonQuietly(analysis));
+            dossier.setCreatedByRole(actor.getType());
+            dossier.setCreatedByUserId(actor.getId());
+            dossier.setCreatedByUserName(fullName(actor));
+            repository.saveAndFlush(dossier);
+
+            // Conserver les deux images en base pour la vérification manuelle Back Office.
+            // Octets lus directement depuis l'upload (indépendant des fichiers temporaires).
+            saveDocument(dossier.getId(), KycDocument.TYPE_CIN, file);
+            saveDocument(dossier.getId(), KycDocument.TYPE_JUSTIF, justif);
 
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("status", "success");
@@ -160,6 +185,17 @@ public class KycService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public KycDocument getDocument(Long dossierId, String type) {
+        String normalizedType = type == null ? "" : type.trim().toUpperCase();
+        if (!KycDocument.TYPE_CIN.equals(normalizedType) && !KycDocument.TYPE_JUSTIF.equals(normalizedType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Type de document invalide (CIN ou JUSTIF).");
+        }
+        return documentRepository.findByDossierIdAndType(dossierId, normalizedType)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Document indisponible (non conservé ou dossier déjà clôturé)."));
+    }
+
     @Transactional
     public Map<String, Object> updateStatus(Long id, String status, String defaultMotif, String motif, boolean motifRequired, String actorRole, Long actorUserId) {
         KycDossier dossier = repository.findById(id)
@@ -193,6 +229,11 @@ public class KycService {
             }
         }
         repository.save(dossier);
+
+        // Rétention : purge des images dès qu'une décision finale est rendue (front ou back).
+        if ("APPROVED".equals(status) || "REJECTED".equals(status)) {
+            documentRepository.deleteAllByDossierId(id);
+        }
 
         String message = switch (status) {
             case "APPROVED" -> "Dossier approuvé";
@@ -280,6 +321,8 @@ public class KycService {
         response.put("motif", dossier.getMotif());
         response.put("agent_report", dossier.getAgentReport());
         response.put("risk_score", dossier.getRiskScore());
+        response.put("analysis", readJsonQuietly(dossier.getAnalysisJson()));
+        response.put("has_documents", documentRepository.existsByDossierId(dossier.getId()));
         response.put("created_by_role", dossier.getCreatedByRole());
         response.put("created_by_user_id", dossier.getCreatedByUserId());
         response.put("created_by_user_name", dossier.getCreatedByUserName());
@@ -442,6 +485,35 @@ public class KycService {
     private String stripAccents(String value) {
         return value == null ? "" : java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "");
+    }
+
+    private void saveDocument(Long dossierId, String type, MultipartFile upload) throws IOException {
+        KycDocument document = new KycDocument();
+        document.setDossierId(dossierId);
+        document.setType(type);
+        document.setContentType(upload.getContentType());
+        document.setFilename(cleanFilename(upload.getOriginalFilename()));
+        document.setData(upload.getBytes());
+        documentRepository.save(document);
+    }
+
+    private String writeJsonQuietly(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private JsonNode readJsonQuietly(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(json);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void deleteQuietly(Path path) {

@@ -26,14 +26,17 @@
 param(
     [switch]$StopAll,
     [int]$McpPort = 7800,
+    [int]$ChequeMcpPort = 7810,
     [int]$AgentPort = 8500,
-    [string]$VlmDtype = "bf16"
+    [string]$VlmDtype = "bf16",
+    [switch]$NoCheque
 )
 
 $ErrorActionPreference = "Stop"
 $RepoRoot   = $PSScriptRoot
 $VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
-$McpServer  = Join-Path $RepoRoot "kyc_mcp_server\server.py"
+$McpServer       = Join-Path $RepoRoot "kyc_mcp_server\server.py"
+$ChequeMcpServer = Join-Path $RepoRoot "cheque_mcp_server\server.py"
 $AgentEntry = Join-Path $RepoRoot "api_server.py"
 $SpringDir  = Join-Path $RepoRoot "kyc-spring-backend"
 $PidFile    = Join-Path $RepoRoot ".kyc-stack.pids"
@@ -92,8 +95,8 @@ Write-Host ""
 Write-Host "Hardware détecté : $gpuCheck" -ForegroundColor Cyan
 Write-Host ""
 
-# ────────────── 1. MCP server SSE ──────────────
-Write-Host "[1/3] Démarrage MCP server (SSE, prewarm)..." -ForegroundColor Cyan
+# ────────────── 1. MCP server KYC (SSE) ──────────────
+Write-Host "[1/4] Démarrage MCP server KYC (SSE, prewarm)..." -ForegroundColor Cyan
 
 $env:KYC_MCP_TRANSPORT = "sse"
 $env:KYC_MCP_PORT      = "$McpPort"
@@ -112,11 +115,40 @@ Set-Content -Path $PidFile -Value "$($mcpProc.Id)" -Encoding ascii
 if (-not (Wait-Port -Port $McpPort -TimeoutSeconds 180 -Label "MCP SSE")) {
     throw "MCP server n'a pas ouvert le port $McpPort après 180s."
 }
-Write-Host "    OK — MCP prêt sur http://127.0.0.1:$McpPort/sse" -ForegroundColor Green
+Write-Host "    OK — MCP KYC prêt sur http://127.0.0.1:$McpPort/sse" -ForegroundColor Green
 
-# ────────────── 2. Python Agent Server (FastAPI) ──────────────
+# ────────────── 2. MCP server CHÈQUE (SSE, lazy) ──────────────
+# GPU 6 Go : on ne peut PAS garder deux VLM résidents. Le serveur chèque démarre
+# en SSE mais SANS prewarm -> 0 modèle en VRAM au boot. C'est l'agent orchestrateur
+# qui charge/évince à la volée (un seul VLM chaud à la fois) : avant un chèque il
+# libère le KYC, et inversement. Désactivable avec -NoCheque.
+if (-not $NoCheque) {
+    Write-Host ""
+    Write-Host "[2/4] Démarrage MCP server CHÈQUE (SSE, lazy)..." -ForegroundColor Cyan
+
+    $env:CHEQUE_MCP_TRANSPORT = "sse"
+    $env:CHEQUE_MCP_PORT      = "$ChequeMcpPort"
+    $env:CHEQUE_VLM_DTYPE     = $VlmDtype
+
+    $chequeMcpProc = Start-Process -FilePath $VenvPython `
+        -ArgumentList "`"$ChequeMcpServer`"", "--sse", "--port", "$ChequeMcpPort" `
+        -WorkingDirectory (Split-Path $ChequeMcpServer) `
+        -WindowStyle Normal `
+        -PassThru
+    Write-Host "    -> MCP Chèque PID = $($chequeMcpProc.Id)" -ForegroundColor DarkGray
+    Add-Content -Path $PidFile -Value "$($chequeMcpProc.Id)" -Encoding ascii
+
+    if (-not (Wait-Port -Port $ChequeMcpPort -TimeoutSeconds 180 -Label "MCP Chèque SSE")) {
+        throw "MCP server chèque n'a pas ouvert le port $ChequeMcpPort après 180s."
+    }
+    Write-Host "    OK — MCP Chèque prêt sur http://127.0.0.1:$ChequeMcpPort/sse" -ForegroundColor Green
+} else {
+    Write-Host "[2/4] MCP server CHÈQUE ignoré (-NoCheque)." -ForegroundColor DarkGray
+}
+
+# ────────────── 3. Python Agent Server (FastAPI) ──────────────
 Write-Host ""
-Write-Host "[2/3] Démarrage Python Agent Server (FastAPI)..." -ForegroundColor Cyan
+Write-Host "[3/4] Démarrage Python Agent Server (FastAPI)..." -ForegroundColor Cyan
 
 $env:KYC_MCP_TRANSPORT      = "sse"
 $env:KYC_MCP_URL            = "http://127.0.0.1:$McpPort/sse"
@@ -124,6 +156,17 @@ $env:KYC_AGENT_REPORT_MODE  = "deterministic"
 $env:KYC_AGENT_PYTHON       = $VenvPython
 $env:KYC_AGENT_PORT         = "$AgentPort"
 $env:KYC_AGENT_HOST         = "127.0.0.1"
+
+# Agent CHÈQUE -> MCP chèque SSE (ou stdio en fallback si -NoCheque).
+if (-not $NoCheque) {
+    $env:CHEQUE_MCP_TRANSPORT     = "sse"
+    $env:CHEQUE_MCP_URL           = "http://127.0.0.1:$ChequeMcpPort/sse"
+} else {
+    $env:CHEQUE_MCP_TRANSPORT     = ""
+    $env:CHEQUE_MCP_URL           = ""
+}
+$env:CHEQUE_AGENT_REPORT_MODE = "deterministic"
+$env:CHEQUE_AGENT_PYTHON      = $VenvPython
 
 $AgentLog = Join-Path $RepoRoot "agent_server.log"
 $agentProc = Start-Process -FilePath $VenvPython `
@@ -147,9 +190,9 @@ if (-not (Wait-Port -Port $AgentPort -TimeoutSeconds 180 -Label "Python Agent"))
 }
 Write-Host "    OK — Agent prêt sur http://127.0.0.1:$AgentPort" -ForegroundColor Green
 
-# ────────────── 3. Spring backend ──────────────
+# ────────────── 4. Spring backend ──────────────
 Write-Host ""
-Write-Host "[3/3] Démarrage Spring backend..." -ForegroundColor Cyan
+Write-Host "[4/4] Démarrage Spring backend..." -ForegroundColor Cyan
 
 $env:KYC_AGENT_URL              = "http://127.0.0.1:$AgentPort"
 $env:KYC_AGENT_TIMEOUT_SECONDS  = "900"

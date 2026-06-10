@@ -177,6 +177,23 @@ def analyser_dossier_kyc_complet(
 
 
 # ─────────────────────────────────────────
+# TOOL DE LIBÉRATION MÉMOIRE (orchestration multi-agents)
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def liberer_modeles_kyc() -> str:
+    """Free the KYC heavy models (YOLO/TrOCR/Qwen-VL) from GPU/RAM so another agent
+    can use the VRAM. Called by the orchestrator before switching to another domain."""
+    try:
+        with _stdout_to_stderr():
+            from tools.extractor import liberer_modeles
+            liberer_modeles()
+        return json.dumps({"status": "ok", "message": "Modèles KYC libérés"}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"erreur": str(e)}, ensure_ascii=False)
+
+
+# ─────────────────────────────────────────
 # Pre-warm: load heavy models at boot so the first call is fast and there is
 # no concurrent loading from multiple requests.
 # ─────────────────────────────────────────

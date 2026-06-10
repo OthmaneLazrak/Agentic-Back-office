@@ -74,6 +74,30 @@ def _charger_modeles_cin():
     return _model_yolo_cin, _processor_trocr, _model_trocr
 
 
+def liberer_modeles():
+    """Libère les modèles KYC (YOLO + TrOCR + Qwen-VL/LoRA) de la VRAM/RAM.
+
+    Utilisé par l'agent orchestrateur pour laisser la place à un autre agent
+    (chèque) sur un GPU à VRAM limitée : un seul VLM résident à la fois.
+    """
+    global _model_yolo_cin, _processor_trocr, _model_trocr, _model_qwen, _processor_qwen
+    _model_yolo_cin = None
+    _processor_trocr = None
+    _model_trocr = None
+    _model_qwen = None
+    _processor_qwen = None
+
+    import gc
+    gc.collect()
+    try:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+    except Exception:
+        pass
+    print("[Extractor] Modèles KYC libérés (VRAM/RAM).")
+
+
 def _charger_modele_justif_qwen():
     """Charge Qwen2-VL et les poids LoRA pour les justificatifs."""
     global _model_qwen, _processor_qwen

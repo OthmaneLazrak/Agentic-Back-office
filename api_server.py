@@ -33,7 +33,7 @@ from fastapi.responses import JSONResponse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from kyc_agent.agent import lancer_analyse_dossier_async
+from orchestrator_agent.agent import analyser_kyc, analyser_cheque, analyser_auto
 
 
 ACCEPTED_MIME_TYPES = {"image/jpeg", "image/png", "image/jpg"}
@@ -109,7 +109,7 @@ async def analyze(
         justif_path = _save_upload(justif, prefix="justif")
 
         try:
-            payload: Dict[str, Any] = await lancer_analyse_dossier_async(cin_path, justif_path)
+            payload: Dict[str, Any] = await analyser_kyc(cin_path, justif_path)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -119,6 +119,65 @@ async def analyze(
         return JSONResponse(payload)
     finally:
         _cleanup(cin_path, justif_path)
+
+
+@app.post("/cheque/analyze")
+async def analyze_cheque(
+    file: UploadFile = File(..., description="Image du chèque"),
+) -> JSONResponse:
+    """Pipeline complet d'analyse de chèque orchestré par le LangGraph agent.
+
+    Mono-document (contrairement au KYC qui prend CIN + justificatif).
+    Le scoring de risque, la persistance Postgres et le mapping final pour le
+    front sont délégués à Spring : on renvoie ici le payload brut produit par
+    l'agent (donnees_manuscrit, donnees_zones, validation, agent_text).
+    """
+    cheque_path = None
+    try:
+        cheque_path = _save_upload(file, prefix="cheque")
+
+        try:
+            payload: Dict[str, Any] = await analyser_cheque(cheque_path)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            print(f"[agent] erreur pipeline chèque: {exc}", file=sys.stderr)
+            raise HTTPException(status_code=500, detail=f"Echec pipeline chèque: {exc}") from exc
+
+        return JSONResponse(payload)
+    finally:
+        _cleanup(cheque_path)
+
+
+@app.post("/orchestrator/analyze")
+async def analyze_orchestrated(
+    file: UploadFile = File(..., description="Document principal (CIN ou chèque)"),
+    justif: UploadFile = File(None, description="Justificatif de domicile (optionnel, dossier KYC)"),
+    hint: str = "",
+) -> JSONResponse:
+    """Point d'entrée « l'orchestrateur décide ».
+
+    L'agent orchestrateur classe la demande (KYC vs chèque) via le LLM, libère la
+    VRAM de l'autre domaine, puis délègue à l'agent spécialisé. Renvoie le payload
+    de l'agent choisi, enrichi de la clé ``route``.
+    """
+    main_path = justif_path = None
+    try:
+        main_path = _save_upload(file, prefix="orch")
+        if justif is not None and justif.filename:
+            justif_path = _save_upload(justif, prefix="orch_justif")
+
+        try:
+            payload: Dict[str, Any] = await analyser_auto(main_path, justif_path, indice=hint)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            print(f"[agent] erreur orchestrateur: {exc}", file=sys.stderr)
+            raise HTTPException(status_code=500, detail=f"Echec orchestrateur: {exc}") from exc
+
+        return JSONResponse(payload)
+    finally:
+        _cleanup(main_path, justif_path)
 
 
 if __name__ == "__main__":

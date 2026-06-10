@@ -44,6 +44,14 @@ public class KycDossier {
     @Column(name = "agent_report", columnDefinition = "text")
     private String agentReport;
 
+    /**
+     * Résultat complet de l'analyse front-office sérialisé en JSON
+     * (champs extraits CIN + justificatif, checks, erreurs, décision, risque).
+     * Permet au Back Office de revoir l'intégralité de l'analyse à l'escalade.
+     */
+    @Column(name = "analysis_json", columnDefinition = "text")
+    private String analysisJson;
+
     @Column(name = "risk_score")
     private Integer riskScore;
 
@@ -180,6 +188,14 @@ public class KycDossier {
 
     public void setAgentReport(String agentReport) {
         this.agentReport = agentReport;
+    }
+
+    public String getAnalysisJson() {
+        return analysisJson;
+    }
+
+    public void setAnalysisJson(String analysisJson) {
+        this.analysisJson = analysisJson;
     }
 
     public Integer getRiskScore() {

@@ -1,10 +1,13 @@
 package com.awb.kyc.controller;
 
 import com.awb.kyc.dto.DecisionRequest;
+import com.awb.kyc.entity.KycDocument;
 import com.awb.kyc.entity.KycUser;
 import com.awb.kyc.service.AuthenticatedUserService;
 import com.awb.kyc.service.KycService;
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -57,6 +60,19 @@ public class KycController {
         return kycService.listDossiers(statut);
     }
 
+    @GetMapping("/kyc/dossiers/{id}/documents/{type}")
+    @PreAuthorize("hasAnyRole('ADMIN','FRONT_OFFICE','BACK_OFFICE')")
+    public ResponseEntity<byte[]> getDocument(@PathVariable Long id, @PathVariable String type) {
+        KycDocument document = kycService.getDocument(id, type);
+        MediaType mediaType = document.getContentType() != null
+                ? MediaType.parseMediaType(document.getContentType())
+                : MediaType.APPLICATION_OCTET_STREAM;
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .cacheControl(CacheControl.noCache())
+                .body(document.getData());
+    }
+
     @GetMapping("/kyc/dashboard")
     @PreAuthorize("hasAnyRole('ADMIN','FRONT_OFFICE','BACK_OFFICE')")
     public Map<String, Object> dashboard(@RequestParam(defaultValue = "14") int range) {
@@ -64,7 +80,7 @@ public class KycController {
     }
 
     @PatchMapping("/kyc/dossiers/{id}/approuver")
-    @PreAuthorize("hasAnyRole('FRONT_OFFICE','BACK_OFFICE')")
+    @PreAuthorize("hasRole('BACK_OFFICE')")
     public Map<String, Object> approuver(@PathVariable Long id, @RequestBody(required = false) DecisionRequest body) {
         KycUser actor = authenticatedUserService.syncAndGetCurrentUser();
         String motif = body == null ? null : body.getMotif();
