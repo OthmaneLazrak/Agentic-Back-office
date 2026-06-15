@@ -1,0 +1,68 @@
+@startuml architecture
+'  Architecture generale - Agent IA Back-Office KYC (Attijariwafa Bank)
+'  Rendu : VS Code (extension PlantUML, Alt+D) ou http://www.plantuml.com/plantuml
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Inter
+skinparam rectangle {
+  RoundCorner 12
+}
+skinparam ArrowColor #455A64
+
+' ---------- Palette AWB ----------
+!define FRONT  #FFF3E0
+!define BACK   #E3EAF5
+!define AI     #E8F5E9
+!define SEC    #FCE4EC
+!define DATA   #ECEFF1
+
+title Architecture generale - Agent IA Back-Office KYC
+
+actor "Agent Back-Office" as user
+
+package "Frontend - React 19 / Vite (:5173)" FRONT {
+  rectangle "Pages\nKYC / Cheque / Dashboard / History / Admin" as UI
+  rectangle "Composants\nRiskGauge / BoxAnnotator / Modal" as COMP
+  rectangle "Auth keycloak-js + apiClient" as AUTHJS
+}
+
+rectangle "Keycloak\nrealm awb-kyc (:8080)" as KC SEC
+
+package "Spring Boot - Back-Office metier (:8000)" BACK {
+  rectangle "Controllers\nAuth / Kyc / Cheque / AdminUser" as CTRL
+  rectangle "Services\nKycService / ChequeService / AiOrchestratorService" as SVC
+  rectangle "Entities + Repos (JPA)\nDossier / Document / Correction / User" as ENT
+}
+
+database "PostgreSQL\nkyc_db" as DB DATA
+
+rectangle "Python Agent Server - FastAPI (:8500)\n/agent/analyze - /cheque/analyze - /orchestrator/analyze" as FAST AI
+
+package "Agents LangGraph + Serveurs MCP" AI {
+  rectangle "orchestrator_agent\nrouteur LLM (Ollama) + gestion VRAM" as ORCH
+  rectangle "kyc_agent" as KAG
+  rectangle "kyc_mcp_server (:7800, SSE)\nextractor / validator / reporter" as KMCP
+  rectangle "cheque_agent" as CAG
+  rectangle "cheque_mcp_server (:7810, SSE)\nextractor / validator / reporter" as CMCP
+}
+
+rectangle "Modeles IA\nQwen2.5-VL LoRA / YOLOv8 / TrOCR" as MODELS AI
+rectangle "training/\ntrain_vlm_lora / train_yolo / train_trocr\nexport_corrections (human-in-the-loop)" as TRAIN AI
+
+user --> UI
+UI --> CTRL : HTTP REST + JWT
+AUTHJS --> KC : OAuth2 login
+CTRL --> KC : validation JWT
+SVC --> DB : JPA
+SVC --> FAST : HTTP (delegation IA)
+FAST --> ORCH
+ORCH --> KAG
+ORCH --> CAG
+KAG --> KMCP
+CAG --> CMCP
+KMCP --> MODELS
+CMCP --> MODELS
+ENT ..> TRAIN : corrections manuelles
+TRAIN ..> MODELS : fine-tuning
+
+@enduml

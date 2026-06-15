@@ -2,9 +2,11 @@ package com.awb.kyc.service;
 
 import com.awb.kyc.entity.ChequeDocument;
 import com.awb.kyc.entity.ChequeDossier;
+import com.awb.kyc.entity.ExtractionCorrection;
 import com.awb.kyc.entity.KycUser;
 import com.awb.kyc.repository.ChequeDocumentRepository;
 import com.awb.kyc.repository.ChequeDossierRepository;
+import com.awb.kyc.repository.ExtractionCorrectionRepository;
 import com.awb.kyc.repository.KycUserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,6 +44,7 @@ public class ChequeService {
     private final ChequeDossierRepository repository;
     private final KycUserRepository userRepository;
     private final ChequeDocumentRepository documentRepository;
+    private final ExtractionCorrectionRepository correctionRepository;
     private final ChequeAiOrchestratorService aiOrchestrator;
     private final ObjectMapper objectMapper;
     private final Path uploadDir;
@@ -50,6 +53,7 @@ public class ChequeService {
             ChequeDossierRepository repository,
             KycUserRepository userRepository,
             ChequeDocumentRepository documentRepository,
+            ExtractionCorrectionRepository correctionRepository,
             ChequeAiOrchestratorService aiOrchestrator,
             ObjectMapper objectMapper,
             @Value("${kyc.upload-dir}") String uploadDir
@@ -57,6 +61,7 @@ public class ChequeService {
         this.repository = repository;
         this.userRepository = userRepository;
         this.documentRepository = documentRepository;
+        this.correctionRepository = correctionRepository;
         this.aiOrchestrator = aiOrchestrator;
         this.objectMapper = objectMapper;
         this.uploadDir = Path.of(uploadDir).toAbsolutePath().normalize();
@@ -128,6 +133,25 @@ public class ChequeService {
             analysis.put("extracted", extracted);
             analysis.put("checks", checks);
             analysis.put("errors", errorsNode.isArray() ? errorsNode : List.of());
+
+            // Boîtes YOLO (+ taille image) du chèque -> correction de la détection au Back Office.
+            Map<String, Object> chequeBoxes = new LinkedHashMap<>();
+            for (String z : List.of("num_compte", "cmc7", "signature")) {
+                JsonNode bx = zones.path(z).path("box");
+                if (bx.isArray()) {
+                    chequeBoxes.put(z, bx);
+                }
+            }
+            Map<String, Object> boxes = new LinkedHashMap<>();
+            if (!chequeBoxes.isEmpty()) {
+                boxes.put(ChequeDocument.TYPE_CHEQUE, chequeBoxes);
+            }
+            analysis.put("boxes", boxes);
+            Map<String, Object> imageSizes = new LinkedHashMap<>();
+            if (zones.path("_image_size").isArray()) {
+                imageSizes.put(ChequeDocument.TYPE_CHEQUE, zones.path("_image_size"));
+            }
+            analysis.put("image_sizes", imageSizes);
 
             ChequeDossier dossier = new ChequeDossier();
             dossier.setFilename(file.getOriginalFilename());
@@ -241,6 +265,75 @@ public class ChequeService {
         };
 
         return Map.of("message", message, "statut", status, "id", id);
+    }
+
+    /**
+     * Enregistre les corrections d'extraction faites par le Back Office sur un chèque.
+     * Une ligne {@link ExtractionCorrection} (document CHEQUE) avec copie de l'image.
+     */
+    @Transactional
+    public Map<String, Object> saveCorrection(Long dossierId,
+                                              Map<String, Map<String, Object>> documents,
+                                              Map<String, Object> boxes,
+                                              Long actorUserId) {
+        Map<String, Map<String, Object>> docs = normalizeKeys(documents);
+        Map<String, Object> boxMap = normalizeKeys(boxes);
+        if (docs.isEmpty() && boxMap.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucune correction fournie.");
+        }
+        ChequeDossier dossier = repository.findById(dossierId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Dossier introuvable"));
+        KycUser actor = resolveUser(actorUserId, null);
+        JsonNode analysis = readJsonQuietly(dossier.getAnalysisJson());
+
+        java.util.Set<String> types = new java.util.LinkedHashSet<>();
+        types.addAll(docs.keySet());
+        types.addAll(boxMap.keySet());
+
+        int saved = 0;
+        for (String type : types) {
+            Map<String, Object> corrected = docs.get(type);
+            Object boxObj = boxMap.get(type);
+            boolean hasText = corrected != null && !corrected.isEmpty();
+            boolean hasBoxes = boxObj instanceof Map && !((Map<?, ?>) boxObj).isEmpty();
+            if (!hasText && !hasBoxes) {
+                continue;
+            }
+
+            JsonNode originalNode = analysis == null ? null : analysis.path("extracted");
+
+            ExtractionCorrection correction = new ExtractionCorrection();
+            correction.setDomain(ExtractionCorrection.DOMAIN_CHEQUE);
+            correction.setDossierId(dossierId);
+            correction.setDocumentType(type);
+            documentRepository.findByDossierIdAndType(dossierId, type).ifPresent(doc -> {
+                correction.setImageData(doc.getData());
+                correction.setContentType(doc.getContentType());
+                correction.setFilename(doc.getFilename());
+            });
+            correction.setOriginalJson(originalNode == null || originalNode.isMissingNode() ? null : originalNode.toString());
+            correction.setCorrectedJson(hasText ? writeJsonQuietly(corrected) : null);
+            correction.setBoxesJson(hasBoxes ? writeJsonQuietly(boxObj) : null);
+            correction.setCorrectedByUserId(actor.getId());
+            correction.setCorrectedByUserName(fullName(actor));
+            correctionRepository.save(correction);
+            saved++;
+        }
+
+        return Map.of("message", "Corrections enregistrées", "count", saved, "id", dossierId);
+    }
+
+    /** Recopie une map en mettant les clés (types de document) en MAJUSCULES. */
+    private <V> Map<String, V> normalizeKeys(Map<String, V> map) {
+        Map<String, V> out = new LinkedHashMap<>();
+        if (map != null) {
+            for (Map.Entry<String, V> e : map.entrySet()) {
+                if (e.getKey() != null) {
+                    out.put(e.getKey().trim().toUpperCase(), e.getValue());
+                }
+            }
+        }
+        return out;
     }
 
     @Transactional(readOnly = true)

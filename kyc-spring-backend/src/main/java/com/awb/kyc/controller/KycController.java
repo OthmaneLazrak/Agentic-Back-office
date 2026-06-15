@@ -1,5 +1,6 @@
 package com.awb.kyc.controller;
 
+import com.awb.kyc.dto.CorrectionRequest;
 import com.awb.kyc.dto.DecisionRequest;
 import com.awb.kyc.entity.KycDocument;
 import com.awb.kyc.entity.KycUser;
@@ -101,5 +102,15 @@ public class KycController {
         KycUser actor = authenticatedUserService.syncAndGetCurrentUser();
         String motif = body == null ? null : body.getMotif();
         return kycService.updateStatus(id, "ESCALATED", "Escaladé pour révision manuelle", motif, false, actor.getType(), actor.getId());
+    }
+
+    @PostMapping("/kyc/dossiers/{id}/corrections")
+    @PreAuthorize("hasRole('BACK_OFFICE')")
+    public Map<String, Object> corriger(@PathVariable Long id, @RequestBody CorrectionRequest body) {
+        KycUser actor = authenticatedUserService.syncAndGetCurrentUser();
+        return kycService.saveCorrection(id,
+                body == null ? null : body.getDocuments(),
+                body == null ? null : body.getBoxes(),
+                actor.getId());
     }
 }

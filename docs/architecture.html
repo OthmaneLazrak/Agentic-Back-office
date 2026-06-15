@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>Architecture - Agent IA Back-Office KYC</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; overflow: hidden; }
+  body { font-family: Inter, Roboto, Arial, sans-serif; line-height: 0; }
+  #wrap { display: inline-block; padding: 18px; box-sizing: border-box; line-height: normal; vertical-align: top; }
+  h1 { color: #1e293b; font-size: 26px; text-align: center; margin: 0 0 12px; }
+  .sub { color: #E8821E; text-align: center; font-size: 16px; margin-bottom: 14px; }
+  pre.mermaid { margin: 0; display: flex; justify-content: center; }
+  pre.mermaid svg { display: block; }
+  /* Secours : force une police lisible sur tous les textes du diagramme */
+  pre.mermaid svg .nodeLabel,
+  pre.mermaid svg .edgeLabel,
+  pre.mermaid svg .cluster-label,
+  pre.mermaid svg text { font-size: 30px !important; font-weight: 500; }
+</style>
+<script src="./mermaid.min.js"></script>
+</head>
+<body>
+  <div id="wrap">
+  <h1>Architecture globale </h1>
+  <pre class="mermaid">
+flowchart TB
+    subgraph FE["Frontend - React 19 / Vite (:5173)"]
+        direction TB
+        UI["Pages : KYC, Cheque, Dashboard,<br/>History, Admin, Login"]
+        COMP["Composants : RiskGauge,<br/>BoxAnnotator, DossierDetailModal"]
+        AUTHJS["Auth : keycloak-js + apiClient"]
+    end
+    KC["Keycloak<br/>realm awb-kyc (:8080)"]
+    subgraph SB["Spring Boot - Back-Office metier (:8000)"]
+        direction TB
+        CTRL["Controllers<br/>Auth / Kyc / Cheque / AdminUser"]
+        SVC["Services<br/>KycService, ChequeService,<br/>AiOrchestratorService"]
+        ENT["Entities + Repos (JPA)<br/>Dossier / Document / Correction / User"]
+    end
+    DB[("PostgreSQL<br/>kyc_db")]
+    FAST["Python Agent Server - FastAPI (:8500)<br/>/agent/analyze - /cheque/analyze - /orchestrator/analyze"]
+    subgraph AGENTS["Agents LangGraph + Serveurs MCP"]
+        direction TB
+        ORCH["orchestrator_agent<br/>routeur LLM (Ollama) + gestion VRAM"]
+        subgraph KYCDOM["Domaine KYC"]
+            KAG["kyc_agent"] --> KMCP["kyc_mcp_server (:7800, SSE)<br/>extractor / validator / reporter"]
+        end
+        subgraph CHQDOM["Domaine Cheque"]
+            CAG["cheque_agent"] --> CMCP["cheque_mcp_server (:7810, SSE)<br/>extractor / validator / reporter"]
+        end
+        ORCH --> KAG
+        ORCH --> CAG
+    end
+    MODELS["Modeles IA<br/>Qwen2.5-VL LoRA - YOLOv8 - TrOCR"]
+    TRAIN["training/<br/>train_vlm_lora - train_yolo - train_trocr<br/>export_corrections (human-in-the-loop)"]
+    FE -- "HTTP REST + JWT" --> SB
+    FE -- "OAuth2 login" --> KC
+    SB -- "validation JWT" --> KC
+    SVC -- "JPA" --> DB
+    SVC -- "HTTP (delegation IA)" --> FAST
+    FAST --> ORCH
+    KMCP --> MODELS
+    CMCP --> MODELS
+    ENT -. "corrections manuelles" .-> TRAIN
+    TRAIN -. "fine-tuning" .-> MODELS
+    classDef front fill:#FFF3E0,stroke:#E8821E,stroke-width:2px,color:#1e293b;
+    classDef back fill:#E3EAF5,stroke:#1e293b,stroke-width:2px,color:#1e293b;
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1e293b;
+    classDef data fill:#ECEFF1,stroke:#455A64,stroke-width:2px,color:#1e293b;
+    classDef sec fill:#FCE4EC,stroke:#AD1457,stroke-width:2px,color:#1e293b;
+    class FE,UI,COMP,AUTHJS front;
+    class SB,CTRL,SVC,ENT back;
+    class FAST,AGENTS,ORCH,KAG,CAG,KMCP,CMCP,MODELS,TRAIN ai;
+    class DB data;
+    class KC sec;
+  </pre>
+  </div>
+  <script>
+    mermaid.initialize({
+      startup: false,
+      theme: "base",
+      themeVariables: { fontSize: "30px" },
+      flowchart: { nodeSpacing: 70, rankSpacing: 85 }
+    });
+    window.addEventListener("load", async () => {
+      await mermaid.run();
+      // Force le SVG a sa taille naturelle (mermaid lui met max-width:100% qui le retrecit)
+      const svg = document.querySelector(".mermaid svg");
+      const vb = svg.viewBox.baseVal;            // dimensions natives du graphe
+      svg.style.maxWidth = "none";
+      svg.style.width = vb.width + "px";
+      svg.style.height = vb.height + "px";
+      // Ajuste la taille de la page PDF exactement au contenu (1 seule page, sans marge perdue)
+      const wrap = document.getElementById("wrap");
+      const r = wrap.getBoundingClientRect();
+      const w = Math.ceil(r.width), h = Math.ceil(r.height);
+      // Verrouille html/body sur la taille du contenu : aucun debordement -> pas de 2e page blanche
+      const lock = "width:" + w + "px;height:" + h + "px;overflow:hidden;";
+      document.documentElement.style.cssText += lock;
+      document.body.style.cssText += lock;
+      // Page strictement plus grande que la boite body (verrouillee + overflow:hidden) :
+      // Chromium n'a plus de debordement a paginer -> une seule page.
+      const pad = 40;
+      const st = document.createElement("style");
+      st.textContent = "@page { size: " + (w + pad) + "px " + (h + pad) + "px; margin: 0; }";
+      document.head.appendChild(st);
+      document.title = "READY-" + document.title;
+    });
+  </script>
+</body>
+</html>

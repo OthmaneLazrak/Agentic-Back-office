@@ -1,0 +1,211 @@
+@startuml diagramme-classes-kyc
+'==============================================================
+' Diagramme de classes - KYC / Cheque Back-Office (AWB)
+' Modele conceptuel aligne sur les entites JPA reelles.
+'==============================================================
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+hide circle
+
+skinparam class {
+  BackgroundColor #FDFDFD
+  BorderColor #1E293B
+  ArrowColor #1E293B
+  HeaderBackgroundColor #1E293B
+  FontColor #0F172A
+}
+
+' ============================ ACTEURS ============================
+
+enum Role {
+  FRONT_OFFICE
+  BACK_OFFICE
+  ADMINISTRATEUR
+}
+
+class KycUser {
+  +id : Long
+  +nom : String
+  +prenom : String
+  +type : String  <<role>>
+  +keycloakId : String
+  +username : String
+  +email : String
+  +createdAt : LocalDateTime
+}
+
+note right of KycUser
+  Pas d'heritage en base : le role
+  (FrontOffice / BackOffice / Admin)
+  est porte par le champ **type**
+  et gere via Keycloak.
+end note
+
+KycUser ..> Role : type
+
+' ============================ ENUMS METIER ============================
+
+enum StatutDossier {
+  PENDING
+  ESCALATED
+  APPROVED
+  REJECTED
+  CORRECTED
+}
+
+enum Decision {
+  ACCEPTE
+  REJETE
+  A_VERIFIER
+}
+
+' ============================ DOSSIERS ============================
+
+abstract class Dossier {
+  +id : Long
+  +filename : String
+  +statut : StatutDossier
+  +decisionIa : Decision
+  +decisionBackOffice : Decision
+  +motif : String
+  +motifBackOffice : String
+  +riskScore : Integer
+  +analysisJson : String  <<resultat IA serialise>>
+  +agentReport : String
+  --
+  ' Audit human-in-the-loop
+  +createdByRole / Id / Name
+  +escalatedByRole / Id / Name
+  +handledByRole / Id / Name
+  +createdAt : LocalDateTime
+  +updatedAt : LocalDateTime
+}
+
+note bottom of Dossier
+  Dans le code : **pas** de superclasse.
+  KycDossier et ChequeDossier sont 2 entites
+  independantes (tables kyc_dossiers /
+  cheque_dossiers) aux champs paralleles.
+  La classe abstraite ci-dessus factorise
+  ces champs au niveau conceptuel.
+end note
+
+class KycDossier {
+  +nom : String
+  +prenom : String
+  +cin : String
+}
+
+class ChequeDossier {
+  +montantChiffre : String
+  +montantLettre : String
+  +beneficiaire : String
+  +numCompte : String
+  +cmc7 : String
+  +signaturePresent : Boolean
+}
+
+Dossier <|-- KycDossier
+Dossier <|-- ChequeDossier
+
+Dossier ..> StatutDossier : statut
+Dossier ..> Decision : decisionIa / BO
+
+' ============================ DOCUMENTS ============================
+
+abstract class Document {
+  +id : Long
+  +dossierId : Long
+  +type : String
+  +contentType : String
+  +filename : String
+  +data : byte[]  <<BYTEA, purge a la decision>>
+  +createdAt : LocalDateTime
+}
+
+class KycDocument {
+  +TYPE_CIN
+  +TYPE_JUSTIF
+}
+
+class ChequeDocument {
+  +TYPE_CHEQUE
+}
+
+Document <|-- KycDocument
+Document <|-- ChequeDocument
+
+KycDossier "1" *-- "1..*" KycDocument : contient
+ChequeDossier "1" *-- "1" ChequeDocument : contient
+
+' ============================ CORRECTION (HIL) ============================
+
+class ExtractionCorrection {
+  +id : Long
+  +domain : String  <<KYC | CHEQUE>>
+  +dossierId : Long
+  +documentType : String
+  +imageData : byte[]  <<copie>>
+  +originalJson : String  <<avant>>
+  +correctedJson : String  <<verite terrain>>
+  +correctedByUserId : Long
+  +correctedByUserName : String
+  +correctedAt : LocalDateTime
+  +exportedAt : LocalDateTime
+}
+
+note right of ExtractionCorrection
+  Volontairement DECOUPLEE des dossiers :
+  l'image est COPIEE pour survivre a la
+  purge -> alimente le dataset d'entrainement.
+end note
+
+Dossier ..> ExtractionCorrection : genere (BO)
+
+' ============================ ORCHESTRATION IA ============================
+
+interface AiOrchestrator {
+  +analyze(...) : JsonNode
+}
+
+class AiOrchestratorService {
+  +analyze(cinPath, justifPath) : JsonNode
+}
+
+class ChequeAiOrchestratorService {
+  +analyze(chequePath) : JsonNode
+}
+
+AiOrchestrator <|.. AiOrchestratorService
+AiOrchestrator <|.. ChequeAiOrchestratorService
+
+AiOrchestratorService ..> KycDossier : alimente
+ChequeAiOrchestratorService ..> ChequeDossier : alimente
+
+' ============================ SERVICES (traitement) ============================
+
+class KycService {
+  +analyze(file, justif, actorUserId)
+  +updateStatus(id, status, motif, actorRole, ...)
+  +saveCorrection(dossierId, documents, actorUserId)
+  +dashboardStats(range)
+}
+
+class ChequeService {
+  +analyze(file, actorUserId)
+  +updateStatus(id, status, motif, actorRole, ...)
+  +saveCorrection(dossierId, documents, actorUserId)
+  +dashboardStats(range)
+}
+
+KycUser "1" --> "0..*" KycDossier : traite
+KycUser "1" --> "0..*" ChequeDossier : traite
+
+KycService ..> AiOrchestratorService : delegue
+ChequeService ..> ChequeAiOrchestratorService : delegue
+KycService ..> ExtractionCorrection : saveCorrection
+ChequeService ..> ExtractionCorrection : saveCorrection
+
+@enduml

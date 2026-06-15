@@ -19,20 +19,21 @@ const PAGE_META = {
   kyc:        { title: "Front Office KYC",  subtitle: "Saisie, analyse et première décision" },
   cheque:     { title: "Vérification Chèque", subtitle: "Analyse IA et décision sur chèque" },
   historique: { title: "Historique",          subtitle: "Dossiers KYC et chèques traités" },
-  backoffice: { title: "Back Office KYC",   subtitle: "Traitement manuel des dossiers escaladés" },
+  "backoffice-kyc":    { title: "Back Office KYC",    subtitle: "Traitement manuel des dossiers KYC escaladés" },
+  "backoffice-cheque": { title: "Back Office Chèque", subtitle: "Traitement manuel des chèques escaladés" },
   admin:      { title: "Gestion utilisateurs", subtitle: "Création et administration des comptes" },
 };
 
 const DEFAULT_PAGE_BY_ROLE = {
   [ROLES.ADMIN]: "admin",
   [ROLES.FRONT_OFFICE]: "kyc",
-  [ROLES.BACK_OFFICE]: "backoffice",
+  [ROLES.BACK_OFFICE]: "backoffice-kyc",
 };
 
 const ALLOWED_PAGES_BY_ROLE = {
   [ROLES.ADMIN]: ["dashboard", "admin"],
   [ROLES.FRONT_OFFICE]: ["dashboard", "kyc", "cheque", "historique"],
-  [ROLES.BACK_OFFICE]: ["dashboard", "backoffice", "historique"],
+  [ROLES.BACK_OFFICE]: ["dashboard", "backoffice-kyc", "backoffice-cheque", "historique"],
 };
 
 function LoadingScreen({ label = "Chargement…" }) {
@@ -62,6 +63,8 @@ export default function App() {
 
   const [activePage, setActivePage] = useState("dashboard");
   const [backendProfile, setBackendProfile] = useState(null);
+  // Dossier ciblé par un clic sur une notification Back Office (onglet + id).
+  const [notifTarget, setNotifTarget] = useState(null);
 
   useEffect(() => {
     if (!authenticated || !profile) return;
@@ -91,6 +94,14 @@ export default function App() {
     ? { id: backendProfile.id, fullName: backendProfile.fullName, type: backendProfile.role }
     : { id: null, fullName, type: userRole };
 
+  // Clic sur une notification : bascule sur le bon Back Office (KYC/Chèque) et cible le dossier.
+  const handleNotificationClick = (notif) => {
+    const source = notif.source || "kyc";
+    const targetPage = `backoffice-${source}`;
+    if (allowedPages.includes(targetPage)) setActivePage(targetPage);
+    setNotifTarget({ kind: source, id: notif.id, seq: Date.now() });
+  };
+
   return (
     <>
       <style>{GLOBAL_CSS}</style>
@@ -109,6 +120,7 @@ export default function App() {
             userRole={userRole}
             roleLabel={ROLE_LABEL[userRole] || "Utilisateur"}
             fullName={fullName}
+            onNotificationClick={handleNotificationClick}
           />
           <div className="content">
             {activePage === "dashboard" && (
@@ -126,9 +138,14 @@ export default function App() {
                 <ChequePage userRole={userRole} selectedUser={selectedUser} />
               </ProtectedRoute>
             )}
-            {activePage === "backoffice" && (
+            {activePage === "backoffice-kyc" && (
               <ProtectedRoute roles={[ROLES.BACK_OFFICE]}>
-                <BackOfficePage selectedUser={selectedUser} />
+                <BackOfficePage selectedUser={selectedUser} forcedKind="kyc" focusTarget={notifTarget} />
+              </ProtectedRoute>
+            )}
+            {activePage === "backoffice-cheque" && (
+              <ProtectedRoute roles={[ROLES.BACK_OFFICE]}>
+                <BackOfficePage selectedUser={selectedUser} forcedKind="cheque" focusTarget={notifTarget} />
               </ProtectedRoute>
             )}
             {activePage === "historique" && (

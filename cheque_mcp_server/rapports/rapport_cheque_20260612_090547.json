@@ -1,0 +1,37 @@
+{
+    "image": "cheque_11812_cheque_7be5d835-2c9f-4a8a-ae85-41d8bcbd6a43_bcp1.png",
+    "donnees_manuscrit": {
+        "extraction_status": "SUCCESS",
+        "montant_chiffre": "863 046,00 BD",
+        "montant_lettre": "Deux cents soixante trois mille six dirhams",
+        "beneficiaire": "HACHAMI SI MOHAMED"
+    },
+    "donnees_zones": {
+        "extraction_status": "SUCCESS",
+        "num_compte": {
+            "crop": null,
+            "conf": null,
+            "text": null
+        },
+        "cmc7": {
+            "crop": "C:\\Users\\othmane\\PycharmProjects\\Agent_IA_Back_Office\\cheque_mcp_server\\crops\\cmc7\\cheque_11812_cheque_7be5d835-2c9f-4a8a-ae85-41d8bcbd6a43_bcp1__cmc7.png",
+            "conf": 0.372,
+            "text": "0133555329*390780*21465<878450000*S1"
+        },
+        "signature": {
+            "crop": null,
+            "conf": null,
+            "present": false,
+            "match": null
+        }
+    },
+    "validation": {
+        "statut": "A VERIFIER MANUELLEMENT",
+        "message": "Numéro de compte non détecté; Signature non détectée",
+        "erreurs": [
+            "Numéro de compte non détecté",
+            "Signature non détectée"
+        ]
+    },
+    "date_analyse": "2026-06-12 09:05:47"
+}

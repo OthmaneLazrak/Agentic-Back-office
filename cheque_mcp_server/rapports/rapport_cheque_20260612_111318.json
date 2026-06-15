@@ -1,0 +1,34 @@
+{
+    "image": "cheque_11812_cheque_cccf2db9-083d-4fcb-a7a7-f38db246b1b5_bmce.jpg",
+    "donnees_manuscrit": {
+        "extraction_status": "SUCCESS",
+        "montant_chiffre": "82 800,00 DH",
+        "montant_lettre": "Quatre vingt deux Mille Huit",
+        "beneficiaire": "El Alasoui Roulay Lahcen"
+    },
+    "donnees_zones": {
+        "extraction_status": "SUCCESS",
+        "num_compte": {
+            "crop": "C:\\Users\\othmane\\PycharmProjects\\Agent_IA_Back_Office\\cheque_mcp_server\\crops\\num_compte\\cheque_11812_cheque_cccf2db9-083d-4fcb-a7a7-f38db246b1b5_bmce__num_compte.png",
+            "conf": 0.786,
+            "text": "81178000004010006032546"
+        },
+        "cmc7": {
+            "crop": "C:\\Users\\othmane\\PycharmProjects\\Agent_IA_Back_Office\\cheque_mcp_server\\crops\\cmc7\\cheque_11812_cheque_cccf2db9-083d-4fcb-a7a7-f38db246b1b5_bmce__cmc7.png",
+            "conf": 0.381,
+            "text": "8002243069011780A000068210006032545"
+        },
+        "signature": {
+            "crop": "C:\\Users\\othmane\\PycharmProjects\\Agent_IA_Back_Office\\cheque_mcp_server\\crops\\signature\\cheque_11812_cheque_cccf2db9-083d-4fcb-a7a7-f38db246b1b5_bmce__signature.png",
+            "conf": 0.91,
+            "present": true,
+            "match": null
+        }
+    },
+    "validation": {
+        "statut": "VALIDE",
+        "message": "Tous les champs sont présents et lisibles.",
+        "erreurs": []
+    },
+    "date_analyse": "2026-06-12 11:13:18"
+}

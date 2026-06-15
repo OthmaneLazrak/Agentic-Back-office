@@ -1,0 +1,38 @@
+{
+    "image": "cheque_11812_cheque_1c8823e2-e56e-4e26-96de-27028fabe46c_bcp.png",
+    "donnees_manuscrit": {
+        "extraction_status": "SUCCESS",
+        "montant_chiffre": "191000",
+        "montant_lettre": "Mille et un mille",
+        "beneficiaire": "Lamia Aziza"
+    },
+    "donnees_zones": {
+        "extraction_status": "SUCCESS",
+        "num_compte": {
+            "crop": null,
+            "conf": null,
+            "text": null
+        },
+        "cmc7": {
+            "crop": null,
+            "conf": null,
+            "text": null
+        },
+        "signature": {
+            "crop": null,
+            "conf": null,
+            "present": false,
+            "match": null
+        }
+    },
+    "validation": {
+        "statut": "REJETE",
+        "message": "Numéro de compte non détecté; Signature non détectée; Bande CMC7 non détectée",
+        "erreurs": [
+            "Numéro de compte non détecté",
+            "Signature non détectée",
+            "Bande CMC7 non détectée"
+        ]
+    },
+    "date_analyse": "2026-06-12 11:09:50"
+}

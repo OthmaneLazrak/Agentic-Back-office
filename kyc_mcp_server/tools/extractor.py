@@ -31,10 +31,17 @@ MAPPING_CLASSES_CIN = {
 # CONFIGURATION DES CHEMINS
 # ─────────────────────────────────────────
 DOSSIER_ACTUEL = os.path.dirname(os.path.abspath(__file__))
-CHEMIN_MODELE_CIN = os.path.normpath(os.path.join(DOSSIER_ACTUEL, "..", "modele_final", "yolo_cnie_maroc_v1.pt"))
 
-# NOUVEAU : Chemin vers votre dossier LoRA généré
-CHEMIN_MODELE_QWEN_LORA = os.path.normpath(os.path.join(DOSSIER_ACTUEL, "..", "kyc_qwen_lora_final"))
+# Chemins surchargeables par variable d'env -> permet de SWAPPER vers une version
+# réentraînée sans toucher au code (cf. training/). Défauts = modèles de production.
+CHEMIN_MODELE_CIN = os.environ.get("KYC_YOLO_WEIGHTS") or \
+    os.path.normpath(os.path.join(DOSSIER_ACTUEL, "..", "modele_final", "yolo_cnie_maroc_v1.pt"))
+
+CHEMIN_MODELE_QWEN_LORA = os.environ.get("KYC_VLM_ADAPTER") or \
+    os.path.normpath(os.path.join(DOSSIER_ACTUEL, "..", "kyc_qwen_lora_final"))
+
+# Modèle TrOCR (texte imprimé). Surchargeable pour pointer une version fine-tunée.
+TROCR_MODEL = os.environ.get("KYC_TROCR_MODEL", "microsoft/trocr-base-printed")
 
 # ─────────────────────────────────────────
 # SINGLETONS
@@ -65,10 +72,10 @@ def _charger_modeles_cin():
         _model_yolo_cin = YOLO(CHEMIN_MODELE_CIN)
 
     if _model_trocr is None:
-        print(f"[Extractor] Chargement TrOCR sur {_device}...")
-        _processor_trocr = TrOCRProcessor.from_pretrained("microsoft/trocr-base-printed")
+        print(f"[Extractor] Chargement TrOCR ({TROCR_MODEL}) sur {_device}...")
+        _processor_trocr = TrOCRProcessor.from_pretrained(TROCR_MODEL)
         _model_trocr = VisionEncoderDecoderModel.from_pretrained(
-            "microsoft/trocr-base-printed"
+            TROCR_MODEL
         ).to(_device)
 
     return _model_yolo_cin, _processor_trocr, _model_trocr
@@ -197,6 +204,7 @@ def extract_document(chemin_image: str) -> dict:
 
         print(f"[Extractor CIN] {len(boites)} zones détectées")
 
+        boxes = {}   # champ -> [x1, y1, x2, y2] (coords pixels, pour correction YOLO)
         for boite in boites:
             id_classe = int(boite.cls[0])
             nom_classe = MAPPING_CLASSES_CIN.get(
@@ -210,11 +218,16 @@ def extract_document(chemin_image: str) -> dict:
             )
 
             donnees_extraites[nom_classe] = texte_lu
+            boxes[nom_classe] = [int(x1), int(y1), int(x2), int(y2)]
 
         if len(donnees_extraites) <= 2:
             return {"extraction_status": "FAILED",
                     "erreur": "Aucun champ détecté par YOLO."}
 
+        # Boîtes + taille image : permettent au Back Office d'afficher/corriger
+        # la détection (clés préfixées "_" pour ne pas polluer les champs métier).
+        donnees_extraites["_boxes"] = boxes
+        donnees_extraites["_image_size"] = list(image_originale.size)  # [largeur, hauteur]
         return donnees_extraites
 
     except Exception as e:

@@ -1,0 +1,426 @@
+\chapter*{}
+
+
+\begin{center}
+    % Encadré décoratif
+    \fboxrule=2pt
+    \fboxsep=40pt
+    \fcolorbox{black}{gray!7}{
+    \centering
+        \begin{minipage}[c][0.6\textheight][c]{0.8\textwidth}  % Hauteur = 80% de la page
+            \centering
+
+            {\Huge \textbf{Chapitre 1}}\\[1cm]
+            {\LARGE Contexte général du projet }\\[0.7cm]
+            \rule{0.7\textwidth}{1.5pt}\\[0.7cm]
+            {\large Rapport de Projet de Fin d'études}
+        \end{minipage}
+    }
+\end{center}
+\vspace*{\fill}
+
+\addcontentsline{toc}{chapter}{Chapitre 1 --  Contexte général du projet}
+
+\setcounter{chapter}{1}
+\setcounter{section}{0}
+\clearpage
+
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+
+Dans un contexte de transformation digitale, les institutions bancaires
+cherchent à améliorer l'efficacité de leurs traitements internes tout en
+garantissant la conformité réglementaire et la qualité des services. Les
+opérations du back-office, notamment le traitement des dossiers KYC et des
+chèques, représentent à cet égard un enjeu majeur en raison de leur volume,
+de leur complexité et de leur caractère répétitif.
+
+Ce chapitre présente le cadre général du projet. Il introduit d'abord
+l'organisme d'accueil, puis le contexte et l'étude de l'existant, avant de
+formuler la problématique. Il définit ensuite les objectifs visés et les
+besoins du système, et décrit enfin la méthodologie et l'approche de
+gestion adoptées pour la réalisation du projet.
+
+\section{Présentation de l'organisme d'accueil}
+
+\textbf{Attijariwafa Bank} est l'un des plus grands groupes bancaires et
+financiers en Afrique. Né en 2004 de la fusion entre la Banque Commerciale
+du Maroc (BCM) et Wafabank, le groupe occupe aujourd'hui une position
+stratégique dans le secteur bancaire marocain et africain grâce à son
+expertise, sa capacité d'innovation et son réseau étendu.
+
+Présent dans plusieurs pays d'Afrique, d'Europe et du Moyen-Orient, le
+groupe accompagne une clientèle diversifiée composée de particuliers, de
+professionnels, d'entreprises ainsi que de grandes institutions publiques
+et privées. Cette présence internationale lui confère un rôle important
+dans le développement économique et financier de plusieurs marchés.
+
+Les activités du groupe couvrent un large ensemble de services financiers
+et bancaires, notamment :
+
+\begin{itemize}
+    \item La banque de détail ;
+    \item La banque des entreprises et des professionnels ;
+    \item La banque d'investissement ;
+    \item Le financement et les crédits ;
+    \item Les services monétiques et moyens de paiement ;
+    \item L'assurance et les services financiers spécialisés ;
+    \item La gestion des opérations internationales.
+\end{itemize}
+
+Dans un environnement bancaire en constante évolution, Attijariwafa Bank
+accorde une importance majeure à la transformation digitale et à
+l'innovation technologique. Le groupe investit continuellement dans des
+solutions numériques modernes afin d'améliorer l'expérience client, de
+renforcer la sécurité des opérations et d'optimiser ses processus internes.
+C'est précisément dans cette dynamique de modernisation du back-office que
+s'inscrit le présent projet de fin d'études.
+
+\subsection*{Organigramme de l'entreprise}
+
+L'organisation d'Attijariwafa Bank repose sur plusieurs directions et pôles
+spécialisés collaborant afin d'assurer le bon fonctionnement des activités
+bancaires et financières du groupe. La Direction des Systèmes d'Information
+y joue un rôle essentiel : elle pilote la mise en œuvre des projets
+technologiques et des solutions digitales visant à améliorer les
+performances des différents services de la banque.
+
+Le projet réalisé s'intègre principalement dans cette direction, en
+interaction avec les services opérationnels chargés du traitement
+documentaire et des opérations bancaires.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{images/organigramme_atb.png}
+    \caption{Organigramme simplifié d'Attijariwafa Bank \cite{organigramme}}
+    \label{fig:organigramme}
+\end{figure}
+
+La figure ci-dessus présente une vue simplifiée de l'organisation de la
+banque ainsi que les différentes directions impliquées dans les activités
+liées au projet.
+
+\section{Contexte du projet}
+
+Au sein d'Attijariwafa Bank, plusieurs opérations du back-office reposent
+encore sur le traitement manuel de documents administratifs et financiers.
+Le projet s'intéresse plus particulièrement à deux de ces processus : les
+procédures KYC (\textit{Know Your Customer}) et le traitement des chèques.
+
+Les procédures \textbf{KYC} constituent une étape réglementaire essentielle :
+elles permettent de vérifier l'identité des clients et d'assurer la
+conformité imposée aux établissements financiers. Dans ce cadre, les clients
+fournissent différents documents justificatifs, principalement la carte
+nationale d'identité (CIN) et un justificatif de domicile. Le traitement de
+ces documents suppose l'identification des informations utiles, le contrôle
+de leur conformité, puis leur saisie dans les systèmes internes de la banque.
+
+Le \textbf{traitement des chèques} représente la seconde activité ciblée. Il
+implique la lecture des informations portées sur le chèque (montants,
+bénéficiaire, coordonnées bancaires), la vérification des montants et de la
+signature, ainsi que la validation de l'opération de paiement.
+
+Avec l'augmentation continue du volume des documents traités quotidiennement,
+ces traitements manuels atteignent leurs limites face aux exigences de
+rapidité, de précision et de conformité. C'est dans ce contexte que
+l'intégration de technologies d'intelligence artificielle et de traitement
+automatique des documents apparaît comme une réponse adaptée aux besoins de
+la banque.
+
+\section{Étude de l'existant}
+
+L'étude de l'existant permet d'analyser le fonctionnement actuel des
+processus du back-office, d'en identifier les limites, puis de comparer les
+solutions envisageables afin de justifier l'approche retenue.
+
+\subsection*{Description du processus actuel}
+
+Aujourd'hui, les traitements liés aux documents KYC et aux chèques sont
+réalisés selon des étapes majoritairement manuelles.
+
+\subsubsection{Traitement des documents KYC}
+
+Les agents du back-office analysent les documents fournis par le client
+(CIN et justificatif de domicile) afin d'en extraire les informations
+clés : nom et prénom, adresse, numéro de CIN et dates de validité. Ces
+informations sont ensuite saisies manuellement dans les systèmes internes
+de la banque, après contrôle de leur conformité.
+
+\subsubsection{Traitement des chèques}
+
+Le traitement d'un chèque nécessite plusieurs contrôles successifs : lecture
+des informations portées sur le document, vérification des montants (en
+chiffres et en lettres), contrôle des coordonnées bancaires, validation de
+la signature et vérification de la conformité globale des données. La
+majorité de ces vérifications reste réalisée manuellement par les agents.
+
+\subsection*{Critique de l'existant}
+
+Ce fonctionnement, bien qu'opérationnel, présente plusieurs limites :
+
+\begin{itemize}
+    \item \textbf{Temps de traitement élevé :} le traitement manuel ralentit
+    fortement les opérations lorsque le volume de dossiers augmente, et
+    allonge les délais de réponse aux clients.
+    \item \textbf{Risque d'erreurs humaines :} les saisies et vérifications
+    manuelles sont sources d'erreurs, d'oublis et d'incohérences qui
+    affectent la fiabilité des données enregistrées.
+    \item \textbf{Diversité des formats documentaires :} les documents
+    existent sous de multiples modèles (les justificatifs de domicile, par
+    exemple, varient selon l'organisme émetteur), ce qui complique
+    l'identification automatique des informations.
+    \item \textbf{Charge opérationnelle importante :} les tâches répétitives
+    de saisie et de contrôle mobilisent fortement les ressources humaines au
+    détriment des tâches à plus forte valeur ajoutée.
+\end{itemize}
+
+\subsection*{Étude des solutions existantes}
+
+Pour automatiser ce type de traitement documentaire, plusieurs catégories de
+solutions existent sur le marché :
+
+\begin{itemize}
+    \item les \textbf{plateformes commerciales d'\textit{Intelligent Document
+    Processing} (IDP)}, telles qu'ABBYY FlexiCapture ou Google Document AI,
+    qui offrent des performances élevées mais à un coût de licence
+    significatif et avec une dépendance à un fournisseur externe ;
+    \item les \textbf{services cloud d'OCR} (Amazon Textract, Azure Form
+    Recognizer), performants mais soulevant des questions de souveraineté et
+    de confidentialité des données bancaires ;
+    \item les \textbf{solutions sur mesure} fondées sur des modèles
+    \textit{open source} de vision par ordinateur et de reconnaissance de
+    texte, qui offrent une maîtrise complète du traitement et des données,
+    au prix d'un effort de développement plus important.
+\end{itemize}
+
+Compte tenu de la sensibilité des données bancaires et du besoin de maîtrise
+totale du pipeline de traitement, c'est cette dernière approche — une
+\textbf{solution sur mesure} — qui a été retenue.
+
+\subsection*{Solution proposée}
+
+La solution proposée consiste à concevoir un système intelligent automatisant
+une partie des traitements liés aux documents KYC et aux chèques. Elle
+permettra notamment :
+
+\begin{itemize}
+    \item la détection automatique des zones d'intérêt dans les documents ;
+    \item l'extraction automatique des informations présentes sur les CIN et
+    les justificatifs de domicile ;
+    \item l'assistance au traitement et à la vérification des chèques ;
+    \item la réduction des erreurs humaines ;
+    \item l'amélioration de la rapidité et de la précision des traitements.
+\end{itemize}
+
+Elle s'appuie pour cela sur l'OCR (\textit{Optical Character Recognition}),
+les techniques de vision par ordinateur et les modèles de \textit{Machine
+Learning} et de \textit{Deep Learning} dédiés à l'analyse documentaire.
+
+\section{Problématique}
+
+Les limites identifiées dans l'étude de l'existant — temps de traitement
+élevé, risque d'erreurs humaines, difficulté à absorber un volume croissant
+de dossiers et manque de standardisation des processus — convergent vers une
+même question centrale :
+
+\begin{center}
+\textit{Comment automatiser le traitement des documents du back-office
+bancaire à l'aide de l'intelligence artificielle, tout en garantissant la
+précision, la rapidité et la conformité des opérations ?}
+\end{center}
+
+\section{Objectifs à atteindre}
+
+L'objectif principal de ce projet est de concevoir et de développer une
+solution intelligente automatisant les opérations du back-office bancaire,
+en particulier le traitement des documents KYC et des chèques, afin
+d'améliorer l'efficacité opérationnelle tout en réduisant les tâches
+manuelles et les risques d'erreurs.
+
+Cet objectif se décline en plusieurs objectifs spécifiques :
+
+\begin{itemize}
+    \item \textbf{Automatiser l'extraction des données :} extraire
+    automatiquement les informations des documents bancaires à l'aide de
+    l'OCR et de l'intelligence artificielle.
+    \item \textbf{Réduire les erreurs humaines :} limiter les erreurs de
+    saisie et de vérification grâce à l'automatisation et à des mécanismes de
+    contrôle intégrés.
+    \item \textbf{Accélérer le traitement des dossiers :} réduire les délais
+    d'exécution des opérations et de réponse aux clients.
+    \item \textbf{Détecter les anomalies :} identifier automatiquement les
+    incohérences, les écarts ou les informations suspectes dans les documents.
+    \item \textbf{Mettre en place un système de scoring :} attribuer un score
+    de confiance aux dossiers afin d'évaluer leur conformité et de faciliter
+    la prise de décision.
+    \item \textbf{Améliorer l'efficacité du back-office :} optimiser les
+    processus internes en automatisant les tâches répétitives et en assistant
+    le travail des agents.
+\end{itemize}
+
+\section{Besoins de l'application}
+
+L'identification des besoins permet de définir les fonctionnalités attendues
+ainsi que les contraintes techniques et de qualité que doit respecter
+l'application. On distingue les besoins fonctionnels des besoins non
+fonctionnels.
+
+\subsection*{Besoins fonctionnels}
+
+Le tableau~\ref{tab:besoins_fonctionnels} récapitule les fonctionnalités que
+le système doit assurer.
+
+\begin{table}[H]
+\centering
+\label{tab:besoins_fonctionnels}
+\begin{tabular}{|c|l|p{7.5cm}|}
+\hline
+\textbf{ID} & \textbf{Besoin} & \textbf{Description} \\
+\hline
+BF1 & Importation des documents & Charger les documents bancaires sous différents formats (images, PDF). \\
+\hline
+BF2 & Détection des zones d'intérêt & Identifier automatiquement les régions contenant les informations utiles. \\
+\hline
+BF3 & Extraction des informations & Extraire les données des documents via l'OCR et l'IA. \\
+\hline
+BF4 & Vérification et validation & Contrôler la cohérence des informations extraites et leur conformité. \\
+\hline
+BF5 & Traitement KYC & Automatiser la vérification des documents clients et le traitement des dossiers KYC. \\
+\hline
+BF6 & Traitement des chèques & Analyser les chèques (montants, signature, données bancaires). \\
+\hline
+BF7 & Affichage des résultats & Présenter les résultats et les données extraites via une interface claire. \\
+\hline
+BF8 & Score de confiance & Attribuer un score évaluant la fiabilité et la conformité des dossiers. \\
+\hline
+BF9 & Génération de rapports & Produire des rapports de traitement et de validation. \\
+\hline
+\end{tabular}
+\caption{Besoins fonctionnels du système}
+\end{table}
+
+\subsection*{Besoins non fonctionnels}
+
+Les besoins non fonctionnels définissent les critères de qualité du système :
+
+\begin{itemize}
+    \item \textbf{Performance :} traitement rapide des documents pour réduire
+    les délais.
+    \item \textbf{Fiabilité :} précision élevée de l'extraction et de la
+    vérification des données.
+    \item \textbf{Sécurité :} protection des données bancaires et clients par
+    des mécanismes d'authentification et de contrôle d'accès.
+    \item \textbf{Scalabilité :} capacité à traiter un volume croissant de
+    documents et à évoluer selon les besoins de la banque.
+    \item \textbf{Disponibilité :} continuité de service des traitements.
+    \item \textbf{Ergonomie :} interface simple et intuitive pour les agents
+    du back-office.
+    \item \textbf{Maintenabilité :} architecture modulaire facilitant la
+    maintenance et les évolutions futures.
+\end{itemize}
+
+\section{Approche de travail}
+
+\subsection{Méthodologie adoptée}
+
+Une méthodologie Agile fondée sur le framework \textbf{Scrum} a été adoptée.
+Cette approche a permis d'organiser le travail de manière itérative et
+incrémentale tout en favorisant l'adaptation continue aux besoins du projet.
+
+Scrum structure le projet en cycles courts appelés \textbf{sprints}, au cours
+desquels un ensemble de fonctionnalités est conçu, développé, testé et
+validé. Les tâches ont été planifiées et suivies à l'aide d'un \textit{backlog}
+regroupant l'ensemble des fonctionnalités à implémenter ; à chaque sprint,
+les fonctionnalités prioritaires étaient sélectionnées puis développées
+progressivement, ce qui a facilité le suivi de l'avancement et l'intégration
+régulière des retours des encadrants.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{images/scrum.png}
+    \caption{Cycle de vie de la méthodologie Scrum}
+    \label{fig:scrum}
+\end{figure}
+
+Le processus Scrum suivi s'articule autour des étapes suivantes :
+
+\begin{itemize}
+    \item \textbf{Product Backlog :} liste des fonctionnalités et exigences du système.
+    \item \textbf{Sprint Planning :} planification des tâches du sprint.
+    \item \textbf{Sprint Backlog :} ensemble des tâches sélectionnées pour le sprint en cours.
+    \item \textbf{Développement et implémentation :} réalisation des fonctionnalités prévues.
+    \item \textbf{Daily Scrum :} suivi quotidien de l'avancement et des blocages.
+    \item \textbf{Sprint Review :} présentation des fonctionnalités développées.
+    \item \textbf{Sprint Retrospective :} analyse des résultats et identification des axes d'amélioration.
+\end{itemize}
+
+\subsection{Formalismes adoptés}
+
+Afin de modéliser et de documenter le système, plusieurs formalismes UML et
+de conception ont été utilisés :
+
+\begin{itemize}
+    \item \textbf{Diagrammes de cas d'utilisation} pour identifier les
+    interactions entre les acteurs et le système ;
+    \item \textbf{Diagrammes de classes} pour représenter la structure
+    statique de l'application ;
+    \item \textbf{Diagrammes de séquence} pour modéliser les échanges entre
+    composantes ;
+    \item \textbf{Diagrammes d'architecture} pour décrire l'organisation
+    globale du système et les interactions entre les services ;
+    \item \textbf{Maquettes fonctionnelles} pour visualiser les interfaces
+    avant leur implémentation.
+\end{itemize}
+
+\section{Gestion de projet}
+
+Le projet a été découpé en sprints successifs, chacun aboutissant à un
+livrable concret. Le tableau~\ref{tab:sprints} présente la planification
+adoptée.
+
+\begin{table}[H]
+\centering
+\label{tab:sprints}
+\begin{tabular}{|c|p{6.0cm}|p{5.0cm}|}
+\hline
+\textbf{Sprint} & \textbf{Objectif} & \textbf{Livrable} \\
+\hline
+Sprint 0 & Étude du contexte, analyse des besoins et choix technologiques & Cahier des charges, backlog initial \\
+\hline
+Sprint 1 & Conception de l'architecture et des modèles de données & Diagrammes UML, maquettes \\
+\hline
+Sprint 2 & Pipeline d'extraction des documents KYC (CIN, justificatifs) & Module KYC fonctionnel \\
+\hline
+Sprint 3 & Pipeline de traitement des chèques & Module chèque fonctionnel \\
+\hline
+Sprint 4 & Validation, scoring et interface back-office & Application intégrée \\
+\hline
+Sprint 5 & Tests, corrections et documentation & Version finale et rapport \\
+\hline
+\end{tabular}
+\caption{Planification des sprints du projet}
+\end{table}
+
+Le suivi de l'avancement et la répartition des tâches ont été assurés à
+l'aide d'un outil de gestion de projet et d'un diagramme de Gantt, permettant
+de visualiser l'enchaînement des sprints et le respect des échéances.
+
+% Si tu disposes d'un diagramme de Gantt, ajoute-le ici :
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=0.95\textwidth]{images/gantt.png}
+%     \caption{Diagramme de Gantt du projet}
+%     \label{fig:gantt}
+% \end{figure}
+
+\clearpage
+
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+
+Ce chapitre a posé le cadre général du projet : il a présenté l'organisme
+d'accueil, analysé le contexte et l'existant du back-office bancaire, puis
+dégagé la problématique. Il a ensuite défini les objectifs, les besoins
+fonctionnels et non fonctionnels du système, ainsi que la méthodologie et la
+gestion de projet adoptées. Le chapitre suivant sera consacré à la conception
+détaillée de la solution proposée.

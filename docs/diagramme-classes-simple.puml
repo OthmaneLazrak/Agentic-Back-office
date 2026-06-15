@@ -1,0 +1,90 @@
+@startuml diagramme-classes-kyc-simple
+'==============================================================
+' Diagramme de classes (vue simplifiee) - KYC / Cheque Back-Office
+'==============================================================
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+hide circle
+
+skinparam class {
+  BackgroundColor #FDFDFD
+  BorderColor #1E293B
+  ArrowColor #1E293B
+  HeaderBackgroundColor #1E293B
+  FontColor #0F172A
+}
+
+' ------------------------- Acteur -------------------------
+
+enum Role {
+  FRONT_OFFICE
+  BACK_OFFICE
+  ADMINISTRATEUR
+}
+
+class User {
+  +id : Long
+  +nom : String
+  +prenom : String
+  +role : Role
+}
+
+' ------------------------- Dossiers -------------------------
+
+abstract class Dossier {
+  +id : Long
+  +statut : StatutDossier
+  +decisionIa : Decision
+  +decisionBackOffice : Decision
+  +riskScore : Integer
+  +createdAt : LocalDateTime
+}
+
+enum StatutDossier {
+  PENDING
+  ESCALATED
+  APPROVED
+  REJECTED
+}
+
+class KycDossier {
+  +nom : String
+  +prenom : String
+  +cin : String
+}
+
+class ChequeDossier {
+  +montant : String
+  +beneficiaire : String
+  +numCompte : String
+  +cmc7 : String
+  +signaturePresent : Boolean
+}
+
+class Document {
+  +id : Long
+  +type : String
+  +data : byte[]
+}
+
+class AiOrchestrator {
+  +analyserKyc()
+  +analyserCheque()
+  +genererDecision()
+}
+
+' ------------------------- Relations -------------------------
+
+User "1" --> "0..*" Dossier : traite
+User ..> Role
+
+Dossier <|-- KycDossier
+Dossier <|-- ChequeDossier
+Dossier ..> StatutDossier
+
+Dossier "1" *-- "1..*" Document : contient
+AiOrchestrator ..> Dossier : analyse
+
+@enduml

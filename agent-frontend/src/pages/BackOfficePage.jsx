@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AWB } from "../constants/Theme.jsx";
 import api from "../auth/apiClient.js";
+import BoxAnnotator from "../components/BoxAnnotator.jsx";
 
 const Icon = ({ children, size = 16, color = "currentColor" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size}
@@ -20,6 +21,48 @@ const IconAlert = (p) => <Icon {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.7
 const IconInfo = (p) => <Icon {...p}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></Icon>;
 const IconRefresh = (p) => <Icon {...p}><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></Icon>;
 const IconUser = (p) => <Icon {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></Icon>;
+const IconSave = (p) => <Icon {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></Icon>;
+
+// Champs corrigeables par le Back Office, groupés par document (= 1 modèle visé).
+// L'âge (dérivé) et la signature (détection YOLO, phase 2) restent hors de la correction texte.
+const EDITABLE = {
+  kyc: [
+    { doc: "CIN", title: "CIN", fields: [
+      { key: "nom", label: "Nom" },
+      { key: "prenom", label: "Prénom" },
+      { key: "numero_cin", label: "N° CIN" },
+      { key: "date_naissance", label: "Date de naissance" },
+      { key: "date_expiration", label: "Date d'expiration" },
+    ]},
+    { doc: "JUSTIF", title: "Justificatif", fields: [
+      { key: "nom", label: "Nom (justificatif)" },
+      { key: "adresse", label: "Adresse" },
+      { key: "sous_type", label: "Type de document" },
+    ]},
+  ],
+  cheque: [
+    { doc: "CHEQUE", title: "Chèque", fields: [
+      { key: "montant_chiffre", label: "Montant (chiffres)" },
+      { key: "montant_lettre", label: "Montant (lettres)" },
+      { key: "beneficiaire", label: "Bénéficiaire" },
+      { key: "num_compte", label: "N° de compte" },
+      { key: "cmc7", label: "Bande CMC7" },
+    ]},
+  ],
+};
+
+// Pré-remplit le brouillon de correction depuis l'analyse IA (valeurs extraites).
+function initDraft(kind, analysis) {
+  const ex = analysis?.extracted || {};
+  const justif = analysis?.extracted_justif || {};
+  const draft = {};
+  for (const grp of EDITABLE[kind] || []) {
+    const src = (kind === "kyc" && grp.doc === "JUSTIF") ? justif : ex;
+    draft[grp.doc] = {};
+    for (const f of grp.fields) draft[grp.doc][f.key] = src[f.key] ?? "";
+  }
+  return draft;
+}
 
 // ─────────────────────── Types de dossiers traités par le Back Office ───────────────────────
 // Chaque "kind" décrit l'API et le rendu propres au domaine (KYC ou Chèque).
@@ -135,13 +178,45 @@ function DocumentImage({ base, dossierId, type, label }) {
   );
 }
 
-// ─────────────────────── Bloc données extraites (lecture, pour comparaison visuelle) ───────────────────────
-function ExtractedField({ label, value }) {
-  if (value == null || value === "") return null;
+// Classes YOLO annotables par type de document (= clés des boîtes).
+const BOX_CLASSES = {
+  CIN: ["numero_cin", "nom", "prenom", "date_naissance", "date_expiration"],
+  CHEQUE: ["num_compte", "cmc7", "signature"],
+};
+
+// Document + annotateur de boîtes (image récupérée en blob, puis overlay SVG).
+function AnnotatedDocument({ base, dossierId, type, label, imageSize, initialBoxes, classes, onChange }) {
+  const [url, setUrl] = useState(null);
+  const [status, setStatus] = useState("loading");
+
+  useEffect(() => {
+    let revoked = false;
+    let objectUrl = null;
+    setStatus("loading");
+    setUrl(null);
+    api.get(`${base}/${dossierId}/documents/${type}`, { responseType: "blob" })
+      .then((res) => {
+        if (revoked) return;
+        objectUrl = URL.createObjectURL(res.data);
+        setUrl(objectUrl);
+        setStatus("ready");
+      })
+      .catch(() => { if (!revoked) setStatus("error"); });
+    return () => { revoked = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [base, dossierId, type]);
+
   return (
-    <div className="field-row">
-      <label className="field-label">{label}</label>
-      <div className="field-input">{String(value)}</div>
+    <div className="bo-doc">
+      <div className="bo-doc-label">{label} · corriger la détection</div>
+      {status === "loading" && (
+        <div className="bo-doc-frame"><span className="skeleton" style={{ width: "100%", height: "100%", display: "block" }} /></div>
+      )}
+      {status === "error" && (
+        <div className="bo-doc-frame bo-doc-empty"><IconAlert size={18} color={AWB.slate400} /><span>Image indisponible</span></div>
+      )}
+      {status === "ready" && (
+        <BoxAnnotator imageUrl={url} imageSize={imageSize} initialBoxes={initialBoxes} classes={classes} onChange={onChange} />
+      )}
     </div>
   );
 }
@@ -178,70 +253,57 @@ function ChecksList({ checks, errors }) {
   );
 }
 
-function AnalysisPanel({ analysis, kind }) {
-  if (!analysis) {
-    return <div className="bo-empty">Analyse front-office non disponible pour ce dossier.</div>;
-  }
-  const checks = analysis.checks || {};
-  const errors = analysis.errors || [];
-
-  if (kind === "cheque") {
-    const ex = analysis.extracted || {};
-    return (
-      <>
-        <div className="card-subtitle">Données extraites — Chèque</div>
-        <div style={{ marginBottom: 14 }}>
-          <ExtractedField label="Montant (chiffres)" value={ex.montant_chiffre} />
-          <ExtractedField label="Montant (lettres)" value={ex.montant_lettre} />
-          <ExtractedField label="Bénéficiaire" value={ex.beneficiaire} />
-          <ExtractedField label="N° de compte" value={ex.num_compte} />
-          <ExtractedField label="Bande CMC7" value={ex.cmc7} />
-          <ExtractedField label="Signature" value={ex.signature_present ? "Présente" : "Absente"} />
-        </div>
-
-        <div className="divider" style={{ margin: "4px 0 14px" }} />
-        <ChecksList checks={checks} errors={errors} />
-      </>
-    );
-  }
-
-  const cin = analysis.extracted || {};
-  const justif = analysis.extracted_justif || {};
-
+// Panneau ÉDITABLE : l'opérateur corrige les champs extraits (= vérité terrain).
+function CorrectionPanel({ kind, draft, onField, checks, errors }) {
   return (
     <>
-      <div className="card-subtitle">Données extraites — CIN</div>
-      <div style={{ marginBottom: 14 }}>
-        <ExtractedField label="Nom" value={cin.nom} />
-        <ExtractedField label="Prénom" value={cin.prenom} />
-        <ExtractedField label="N° CIN" value={cin.numero_cin} />
-        <ExtractedField label="Date de naissance" value={cin.date_naissance} />
-        <ExtractedField label="Date d'expiration" value={cin.date_expiration} />
-        <ExtractedField label="Âge calculé" value={cin.age != null ? `${cin.age} ans` : null} />
+      <div style={{ fontSize: 11.5, color: AWB.slate500, marginBottom: 12, lineHeight: 1.5 }}>
+        Corrigez les champs mal extraits par l'IA, puis enregistrez : ces corrections
+        serviront à améliorer le modèle.
       </div>
 
-      <div className="divider" style={{ margin: "4px 0 14px" }} />
-      <div className="card-subtitle">Données extraites — Justificatif</div>
-      <div style={{ marginBottom: 14 }}>
-        <ExtractedField label="Nom (justificatif)" value={justif.nom} />
-        <ExtractedField label="Adresse" value={justif.adresse} />
-        <ExtractedField label="Type de document" value={justif.sous_type} />
-      </div>
+      {(EDITABLE[kind] || []).map((grp) => (
+        <div key={grp.doc}>
+          <div className="card-subtitle">Données extraites — {grp.title}</div>
+          <div style={{ marginBottom: 14 }}>
+            {grp.fields.map((f) => (
+              <div className="field-row" key={f.key}>
+                <label className="field-label" htmlFor={`corr-${grp.doc}-${f.key}`}>{f.label}</label>
+                <div className="field-input-wrap">
+                  <input
+                    id={`corr-${grp.doc}-${f.key}`}
+                    className="field-input"
+                    value={draft?.[grp.doc]?.[f.key] ?? ""}
+                    onChange={(e) => onField(grp.doc, f.key, e.target.value)}
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="divider" style={{ margin: "4px 0 14px" }} />
+        </div>
+      ))}
 
-      <div className="divider" style={{ margin: "4px 0 14px" }} />
       <ChecksList checks={checks} errors={errors} />
     </>
   );
 }
 
-export default function BackOfficePage({ selectedUser }) {
-  const [kind, setKind] = useState("kyc"); // "kyc" | "cheque"
+export default function BackOfficePage({ selectedUser, focusTarget, forcedKind }) {
+  const [kind, setKind] = useState(forcedKind || "kyc"); // "kyc" | "cheque"
   const [dossiers, setDossiers] = useState([]);
   const [selected, setSelected] = useState(null);
+  // Id de dossier à sélectionner après le prochain chargement (clic notification).
+  const pendingSelectIdRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [motif, setMotif] = useState("");
+  const [draft, setDraft] = useState({});
+  const [boxesDraft, setBoxesDraft] = useState({}); // { docType: { classe: [x1,y1,x2,y2] } }
+  const [corrSaving, setCorrSaving] = useState(false);
+  const [corrMsg, setCorrMsg] = useState(null);
 
   const base = KINDS[kind].base;
 
@@ -252,7 +314,16 @@ export default function BackOfficePage({ selectedUser }) {
       const res = await api.get(KINDS[kind].base, { params: { statut: "ESCALATED" } });
       const data = res.data;
       setDossiers(data);
-      setSelected((current) => data.find((d) => d.id === current?.id) || data[0] || null);
+      setSelected((current) => {
+        // Priorité au dossier ciblé par une notification, sinon on conserve la sélection.
+        const targetId = pendingSelectIdRef.current;
+        pendingSelectIdRef.current = null;
+        if (targetId != null) {
+          const found = data.find((d) => d.id === targetId);
+          if (found) return found;
+        }
+        return data.find((d) => d.id === current?.id) || data[0] || null;
+      });
     } catch (e) {
       setError(e?.response?.data?.message || "Impossible de charger les dossiers escaladés.");
     } finally {
@@ -264,15 +335,58 @@ export default function BackOfficePage({ selectedUser }) {
     loadEscalated();
   }, [loadEscalated]);
 
+  // Le domaine est imposé par la page (Back Office KYC ou Chèque) : on s'aligne dessus.
+  useEffect(() => {
+    if (forcedKind && forcedKind !== kind) setKind(forcedKind);
+  }, [forcedKind, kind]);
+
   // Changement d'onglet : on vide la sélection courante avant le rechargement.
   useEffect(() => {
     setSelected(null);
   }, [kind]);
 
-  // Réinitialise le commentaire à chaque changement de dossier sélectionné.
+  // Clic sur une notification : on cible le dossier puis on bascule/recharge l'onglet.
+  useEffect(() => {
+    if (!focusTarget) return;
+    pendingSelectIdRef.current = focusTarget.id;
+    if (focusTarget.kind && focusTarget.kind !== kind) {
+      setKind(focusTarget.kind); // déclenche le rechargement via la dépendance [kind]
+    } else {
+      loadEscalated(); // même onglet : on force un rechargement pour cibler le dossier
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTarget]);
+
+  // Réinitialise le commentaire ET le brouillon de correction à chaque
+  // changement de dossier (ou d'onglet KYC/Chèque).
   useEffect(() => {
     setMotif("");
-  }, [selected?.id]);
+    setCorrMsg(null);
+    setDraft(selected ? initDraft(kind, selected.analysis) : {});
+    // Boîtes initiales = celles prédites par YOLO (l'opérateur les ajuste).
+    setBoxesDraft(selected ? (selected.analysis?.boxes || {}) : {});
+  }, [selected?.id, kind]);
+
+  const onField = (doc, key, value) =>
+    setDraft((prev) => ({ ...prev, [doc]: { ...prev[doc], [key]: value } }));
+
+  const onBoxesChange = (docType, newBoxes) =>
+    setBoxesDraft((prev) => ({ ...prev, [docType]: newBoxes }));
+
+  const saveCorrections = async () => {
+    if (!selected) return;
+    setCorrSaving(true);
+    setCorrMsg(null);
+    setError(null);
+    try {
+      const res = await api.post(`${base}/${selected.id}/corrections`, { documents: draft, boxes: boxesDraft });
+      setCorrMsg(`Corrections enregistrées (${res.data?.count ?? 0} document(s)).`);
+    } catch (e) {
+      setError(e?.response?.data?.detail || e?.response?.data?.message || "Corrections non enregistrées.");
+    } finally {
+      setCorrSaving(false);
+    }
+  };
 
   const decide = async (action) => {
     if (!selected) return;
@@ -311,18 +425,20 @@ export default function BackOfficePage({ selectedUser }) {
         </button>
       </div>
 
-      {/* Sélecteur de domaine : KYC ou Chèque */}
-      <div className="tabs" style={{ marginBottom: 16 }}>
-        {Object.entries(KINDS).map(([id, cfg]) => (
-          <div
-            key={id}
-            className={`tab ${kind === id ? "active" : ""}`}
-            onClick={() => setKind(id)}
-          >
-            {cfg.label}
-          </div>
-        ))}
-      </div>
+      {/* Sélecteur de domaine : masqué lorsque la page impose déjà KYC ou Chèque */}
+      {!forcedKind && (
+        <div className="tabs" style={{ marginBottom: 16 }}>
+          {Object.entries(KINDS).map(([id, cfg]) => (
+            <div
+              key={id}
+              className={`tab ${kind === id ? "active" : ""}`}
+              onClick={() => setKind(id)}
+            >
+              {cfg.label}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="bo-grid">
         <div className="card bo-list-card">
@@ -381,13 +497,27 @@ export default function BackOfficePage({ selectedUser }) {
                   <div className="card-subtitle">Documents originaux</div>
                   {selected.has_documents ? (
                     KINDS[kind].docs.map((doc) => (
-                      <DocumentImage
-                        key={doc.type}
-                        base={base}
-                        dossierId={selected.id}
-                        type={doc.type}
-                        label={doc.label}
-                      />
+                      BOX_CLASSES[doc.type] ? (
+                        <AnnotatedDocument
+                          key={doc.type}
+                          base={base}
+                          dossierId={selected.id}
+                          type={doc.type}
+                          label={doc.label}
+                          imageSize={selected.analysis?.image_sizes?.[doc.type]}
+                          initialBoxes={selected.analysis?.boxes?.[doc.type]}
+                          classes={BOX_CLASSES[doc.type]}
+                          onChange={(nb) => onBoxesChange(doc.type, nb)}
+                        />
+                      ) : (
+                        <DocumentImage
+                          key={doc.type}
+                          base={base}
+                          dossierId={selected.id}
+                          type={doc.type}
+                          label={doc.label}
+                        />
+                      )
                     ))
                   ) : (
                     <div className="bo-doc-frame bo-doc-empty">
@@ -398,8 +528,28 @@ export default function BackOfficePage({ selectedUser }) {
                 </div>
 
                 <div className="bo-verify-data">
-                  <AnalysisPanel analysis={selected.analysis} kind={kind} />
+                  <CorrectionPanel
+                    kind={kind}
+                    draft={draft}
+                    onField={onField}
+                    checks={selected.analysis?.checks || {}}
+                    errors={selected.analysis?.errors || []}
+                  />
                 </div>
+              </div>
+
+              {/* Enregistrement des corrections (human-in-the-loop) */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+                <button className="btn-outline" onClick={saveCorrections} disabled={corrSaving}>
+                  {corrSaving ? <div className="spinner" /> : <IconSave size={13} />}
+                  Enregistrer les corrections
+                </button>
+                {corrMsg && (
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: AWB.success }}>
+                    <IconCheck size={13} color={AWB.success} />
+                    {corrMsg}
+                  </span>
+                )}
               </div>
 
               <div className="bo-detail-grid" style={{ marginTop: 16 }}>

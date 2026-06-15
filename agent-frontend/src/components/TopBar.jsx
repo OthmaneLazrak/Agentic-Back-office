@@ -34,7 +34,7 @@ function initialsOf(name = "") {
     .join("") || "U";
 }
 
-function NotificationsMenu({ onClose, notifications = [] }) {
+function NotificationsMenu({ onClose, notifications = [], onSelect }) {
   const ref = useRef();
   useClickOutside(ref, onClose);
   return (
@@ -51,13 +51,19 @@ function NotificationsMenu({ onClose, notifications = [] }) {
           </div>
         )}
         {notifications.map((n) => (
-          <div key={n.id} className="tb-notif unread">
+          <button
+            key={`${n.source || "kyc"}-${n.id}`}
+            type="button"
+            className="tb-notif unread"
+            onClick={() => { onSelect?.(n); onClose(); }}
+            style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer" }}
+          >
             <span className="tb-notif-dot warning" />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="tb-notif-title">{n.title}</div>
               <div className="tb-notif-meta">{n.motif}</div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -94,7 +100,7 @@ function UserMenu({ onClose, roleLabel, fullName, email, onLogout, onAccount }) 
   );
 }
 
-export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "", userRole = ROLES.FRONT_OFFICE, roleLabel = "Utilisateur", fullName = "Utilisateur" }) {
+export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "", userRole = ROLES.FRONT_OFFICE, roleLabel = "Utilisateur", fullName = "Utilisateur", onNotificationClick }) {
   const { profile, logout, accountManagement } = useAuth();
   const [openMenu, setOpenMenu] = useState(null);
   const [notifications, setNotifications] = useState([]);
@@ -109,8 +115,22 @@ export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "", u
     let cancelled = false;
     const loadNotifications = async () => {
       try {
-        const res = await api.get(`/kyc/dashboard?range=14`);
-        if (!cancelled) setNotifications(res.data.notifications || []);
+        // Fusionne les escalades KYC et Chèque pour le Back Office.
+        const [kycRes, chequeRes] = await Promise.allSettled([
+          api.get(`/kyc/dashboard?range=14`),
+          api.get(`/cheque/dashboard?range=14`),
+        ]);
+
+        const tag = (res, source) =>
+          res.status === "fulfilled"
+            ? (res.value.data.notifications || []).map((n) => ({ ...n, source }))
+            : [];
+
+        const merged = [...tag(kycRes, "kyc"), ...tag(chequeRes, "cheque")].sort(
+          (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+        );
+
+        if (!cancelled) setNotifications(merged);
       } catch {
         if (!cancelled) setNotifications([]);
       }
@@ -145,6 +165,7 @@ export default function Topbar({ pageTitle = "Back-Office", pageSubtitle = "", u
               <NotificationsMenu
                 onClose={() => setOpenMenu(null)}
                 notifications={notifications}
+                onSelect={onNotificationClick}
               />
             )}
           </div>

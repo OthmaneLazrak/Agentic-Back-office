@@ -1,0 +1,16 @@
+# Datasets générés depuis les corrections : contiennent des images (données
+# personnelles : CIN, chèques) -> NE JAMAIS committer.
+data/
+tmp_*/
+
+# Poids/adaptateurs réentraînés (versions locales).
+*_lora_v*/
+trocr_v*/
+*_v*.pt
+
+# Runs d'entraînement YOLO (ultralytics)
+**/_yolo_runs/
+
+# Caches
+__pycache__/
+*.pyc

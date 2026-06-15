@@ -1,0 +1,38 @@
+{
+    "image": "cheque_11812_cheque_f2a4c6b2-4b25-42a9-98bd-2f92279594d0_bmce1.png",
+    "donnees_manuscrit": {
+        "extraction_status": "SUCCESS",
+        "montant_chiffre": "27.700,00 €",
+        "montant_lettre": "Vingt Deux Mille Sept Cent Euros",
+        "beneficiaire": "Agence Hay Hassani"
+    },
+    "donnees_zones": {
+        "extraction_status": "SUCCESS",
+        "num_compte": {
+            "crop": null,
+            "conf": null,
+            "text": null
+        },
+        "cmc7": {
+            "crop": null,
+            "conf": null,
+            "text": null
+        },
+        "signature": {
+            "crop": null,
+            "conf": null,
+            "present": false,
+            "match": null
+        }
+    },
+    "validation": {
+        "statut": "REJETE",
+        "message": "Numéro de compte non détecté; Signature non détectée; Bande CMC7 non détectée",
+        "erreurs": [
+            "Numéro de compte non détecté",
+            "Signature non détectée",
+            "Bande CMC7 non détectée"
+        ]
+    },
+    "date_analyse": "2026-06-12 11:12:01"
+}

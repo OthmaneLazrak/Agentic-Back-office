@@ -241,6 +241,20 @@ export const GLOBAL_CSS = `
   }
   .hist-search-input::placeholder { color: ${AWB.slate400}; }
 
+  /* ─────────────────────── Box annotator (correction YOLO) ─────────────────────── */
+  .annot { display: flex; flex-direction: column; gap: 8px; }
+  .annot-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .annot-chip {
+    font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 7px;
+    border: 1px solid var(--c); background: white; color: var(--c);
+    cursor: pointer; font-family: inherit; transition: all 0.15s ease;
+  }
+  .annot-chip.has { background: color-mix(in srgb, var(--c) 12%, white); }
+  .annot-chip.missing { opacity: 0.6; border-style: dashed; }
+  .annot-chip.active { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 35%, white); opacity: 1; }
+  .annot-toolbar .btn-outline.active { border-color: ${AWB.navy}; color: ${AWB.navy}; background: ${AWB.slate50}; }
+  .annot-stage img { user-select: none; -webkit-user-drag: none; }
+
   /* ─────────────────────── Dossier detail modal ─────────────────────── */
   .modal-overlay {
     position: fixed; inset: 0; z-index: 1000;

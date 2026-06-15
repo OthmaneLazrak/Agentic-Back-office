@@ -24,13 +24,18 @@ import torch
 DOSSIER_ACTUEL = os.path.dirname(os.path.abspath(__file__))
 SERVER_DIR = os.path.abspath(os.path.join(DOSSIER_ACTUEL, ".."))
 
-VLM_BASE = "Qwen/Qwen2-VL-2B-Instruct"
-CHEMIN_MODELE_VLM_LORA = os.path.normpath(os.path.join(SERVER_DIR, "cheque_qwen_lora_final"))
-CHEMIN_MODELE_YOLO = os.path.normpath(os.path.join(SERVER_DIR, "modele_final", "best.pt"))
+VLM_BASE = os.environ.get("CHEQUE_VLM_BASE", "Qwen/Qwen2-VL-2B-Instruct")
+
+# Chemins surchargeables par variable d'env -> SWAP vers une version réentraînée
+# sans toucher au code (cf. training/). Défauts = modèles de production.
+CHEMIN_MODELE_VLM_LORA = os.environ.get("CHEQUE_VLM_ADAPTER") or \
+    os.path.normpath(os.path.join(SERVER_DIR, "cheque_qwen_lora_final"))
+CHEMIN_MODELE_YOLO = os.environ.get("CHEQUE_YOLO_WEIGHTS") or \
+    os.path.normpath(os.path.join(SERVER_DIR, "modele_final", "best.pt"))
 CROP_DIR = os.path.normpath(os.path.join(SERVER_DIR, "crops"))
 
 # Texte imprimé (num_compte, cmc7). Manuscrit -> "microsoft/trocr-base-handwritten".
-TROCR_MODEL = "microsoft/trocr-base-printed"
+TROCR_MODEL = os.environ.get("CHEQUE_TROCR_MODEL", "microsoft/trocr-base-printed")
 
 YOLO_NAMES = ["num_compte", "signature", "cmc7"]
 PROMPT_VLM = (
@@ -285,19 +290,23 @@ def extract_zones(chemin_image: str, conf: float = 0.25) -> dict:
 
         return {
             "extraction_status": "SUCCESS",
+            "_image_size": list(im.size),   # [largeur, hauteur] (pour correction YOLO)
             "num_compte": {
                 "crop": detections.get("num_compte", {}).get("crop"),
                 "conf": detections.get("num_compte", {}).get("conf"),
+                "box": detections.get("num_compte", {}).get("box"),
                 "text": num_compte_text,
             },
             "cmc7": {
                 "crop": detections.get("cmc7", {}).get("crop"),
                 "conf": detections.get("cmc7", {}).get("conf"),
+                "box": detections.get("cmc7", {}).get("box"),
                 "text": cmc7_text,
             },
             "signature": {
                 "crop": detections.get("signature", {}).get("crop"),
                 "conf": detections.get("signature", {}).get("conf"),
+                "box": detections.get("signature", {}).get("box"),
                 "present": "signature" in detections,
                 "match": None,
             },

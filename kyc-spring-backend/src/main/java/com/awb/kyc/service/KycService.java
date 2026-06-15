@@ -1,8 +1,10 @@
 package com.awb.kyc.service;
 
+import com.awb.kyc.entity.ExtractionCorrection;
 import com.awb.kyc.entity.KycDocument;
 import com.awb.kyc.entity.KycDossier;
 import com.awb.kyc.entity.KycUser;
+import com.awb.kyc.repository.ExtractionCorrectionRepository;
 import com.awb.kyc.repository.KycDocumentRepository;
 import com.awb.kyc.repository.KycDossierRepository;
 import com.awb.kyc.repository.KycUserRepository;
@@ -35,6 +37,7 @@ public class KycService {
     private final KycDossierRepository repository;
     private final KycUserRepository userRepository;
     private final KycDocumentRepository documentRepository;
+    private final ExtractionCorrectionRepository correctionRepository;
     private final AiOrchestratorService aiOrchestrator;
     private final ObjectMapper objectMapper;
     private final Path uploadDir;
@@ -43,6 +46,7 @@ public class KycService {
             KycDossierRepository repository,
             KycUserRepository userRepository,
             KycDocumentRepository documentRepository,
+            ExtractionCorrectionRepository correctionRepository,
             AiOrchestratorService aiOrchestrator,
             ObjectMapper objectMapper,
             @Value("${kyc.upload-dir}") String uploadDir
@@ -50,6 +54,7 @@ public class KycService {
         this.repository = repository;
         this.userRepository = userRepository;
         this.documentRepository = documentRepository;
+        this.correctionRepository = correctionRepository;
         this.aiOrchestrator = aiOrchestrator;
         this.objectMapper = objectMapper;
         this.uploadDir = Path.of(uploadDir).toAbsolutePath().normalize();
@@ -122,6 +127,19 @@ public class KycService {
             analysis.put("extracted_justif", extractedJustif);
             analysis.put("checks", checks);
             analysis.put("errors", errorsNode.isArray() ? errorsNode : List.of());
+
+            // Boîtes YOLO (+ taille image) par document -> permettent au Back Office
+            // d'afficher/corriger la détection. CIN uniquement (le justificatif est VLM).
+            Map<String, Object> boxes = new LinkedHashMap<>();
+            if (donneesCin.path("_boxes").isObject()) {
+                boxes.put(KycDocument.TYPE_CIN, donneesCin.path("_boxes"));
+            }
+            analysis.put("boxes", boxes);
+            Map<String, Object> imageSizes = new LinkedHashMap<>();
+            if (donneesCin.path("_image_size").isArray()) {
+                imageSizes.put(KycDocument.TYPE_CIN, donneesCin.path("_image_size"));
+            }
+            analysis.put("image_sizes", imageSizes);
 
             KycDossier dossier = new KycDossier();
             dossier.setFilename(file.getOriginalFilename());
@@ -243,6 +261,77 @@ public class KycService {
         };
 
         return Map.of("message", message, "statut", status, "id", id);
+    }
+
+    /**
+     * Enregistre les corrections d'extraction faites par le Back Office.
+     * Une ligne {@link ExtractionCorrection} par document corrigé (CIN / JUSTIF),
+     * avec une copie de l'image (vérité terrain pour le réentraînement).
+     */
+    @Transactional
+    public Map<String, Object> saveCorrection(Long dossierId,
+                                              Map<String, Map<String, Object>> documents,
+                                              Map<String, Object> boxes,
+                                              Long actorUserId) {
+        Map<String, Map<String, Object>> docs = normalizeKeys(documents);
+        Map<String, Object> boxMap = normalizeKeys(boxes);
+        if (docs.isEmpty() && boxMap.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucune correction fournie.");
+        }
+        KycDossier dossier = repository.findById(dossierId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Dossier introuvable"));
+        KycUser actor = resolveUser(actorUserId, null);
+        JsonNode analysis = readJsonQuietly(dossier.getAnalysisJson());
+
+        java.util.Set<String> types = new java.util.LinkedHashSet<>();
+        types.addAll(docs.keySet());
+        types.addAll(boxMap.keySet());
+
+        int saved = 0;
+        for (String type : types) {
+            Map<String, Object> corrected = docs.get(type);
+            Object boxObj = boxMap.get(type);
+            boolean hasText = corrected != null && !corrected.isEmpty();
+            boolean hasBoxes = boxObj instanceof Map && !((Map<?, ?>) boxObj).isEmpty();
+            if (!hasText && !hasBoxes) {
+                continue;
+            }
+
+            JsonNode originalNode = analysis == null ? null
+                    : (KycDocument.TYPE_JUSTIF.equals(type) ? analysis.path("extracted_justif") : analysis.path("extracted"));
+
+            ExtractionCorrection correction = new ExtractionCorrection();
+            correction.setDomain(ExtractionCorrection.DOMAIN_KYC);
+            correction.setDossierId(dossierId);
+            correction.setDocumentType(type);
+            documentRepository.findByDossierIdAndType(dossierId, type).ifPresent(doc -> {
+                correction.setImageData(doc.getData());
+                correction.setContentType(doc.getContentType());
+                correction.setFilename(doc.getFilename());
+            });
+            correction.setOriginalJson(originalNode == null || originalNode.isMissingNode() ? null : originalNode.toString());
+            correction.setCorrectedJson(hasText ? writeJsonQuietly(corrected) : null);
+            correction.setBoxesJson(hasBoxes ? writeJsonQuietly(boxObj) : null);
+            correction.setCorrectedByUserId(actor.getId());
+            correction.setCorrectedByUserName(fullName(actor));
+            correctionRepository.save(correction);
+            saved++;
+        }
+
+        return Map.of("message", "Corrections enregistrées", "count", saved, "id", dossierId);
+    }
+
+    /** Recopie une map en mettant les clés (types de document) en MAJUSCULES. */
+    private <V> Map<String, V> normalizeKeys(Map<String, V> map) {
+        Map<String, V> out = new LinkedHashMap<>();
+        if (map != null) {
+            for (Map.Entry<String, V> e : map.entrySet()) {
+                if (e.getKey() != null) {
+                    out.put(e.getKey().trim().toUpperCase(), e.getValue());
+                }
+            }
+        }
+        return out;
     }
 
     @Transactional(readOnly = true)

@@ -1,0 +1,375 @@
+\section{Agent IA de traitement des chèques}
+
+Cette section présente l'approche utilisée pour le traitement automatisé
+des chèques bancaires. Contrairement aux documents KYC (CIN, justificatifs
+de domicile) dont l'information recherchée est de même nature, le chèque
+mêle sur un même support \textbf{trois types d'information visuellement très
+différents} :
+\begin{itemize}
+    \item des \textbf{champs manuscrits} (montant en chiffres, montant en
+    lettres, nom du bénéficiaire), rédigés à la main par l'émetteur ;
+    \item des \textbf{zones imprimées} normalisées (numéro de compte, bande
+    magnétique CMC7) ;
+    \item une \textbf{zone graphique} (la signature), dont seule la présence
+    doit être vérifiée.
+\end{itemize}
+
+Cette hétérogénéité interdit l'usage d'un modèle unique. Le système repose
+donc sur une \textbf{architecture hybride combinant trois modèles
+complémentaires}, chacun spécialisé sur le type d'information qu'il sait
+traiter au mieux.
+
+\subsection*{Objectif et architecture globale}
+
+\subsubsection{Objectif}
+
+L'objectif de cette partie est de développer un système intelligent capable
+d'automatiser la lecture et la validation d'un chèque bancaire marocain afin
+d'alimenter le processus de back-office de manière automatisée.
+
+Les champs traités sont les suivants :
+\begin{itemize}
+    \item Le montant en chiffres.
+    \item Le montant en lettres.
+    \item Le nom du bénéficiaire.
+    \item Le numéro de compte.
+    \item La bande CMC7 (ligne magnétique de bas de chèque).
+    \item La présence de la signature.
+\end{itemize}
+
+\subsubsection{Architecture hybride à trois modèles}
+
+Le traitement d'un chèque repose sur trois modèles d'intelligence
+artificielle complémentaires, orchestrés au sein du module
+\texttt{tools/extractor.py} :
+
+\begin{itemize}
+    \item \textbf{YOLOv8} pour la \textit{détection des zones} structurées
+    du chèque (numéro de compte, signature, bande CMC7) ;
+    \item \textbf{TrOCR} (variante \textit{printed}) pour la reconnaissance
+    optique du \textit{texte imprimé} des zones détectées (numéro de compte
+    et CMC7) ;
+    \item \textbf{Qwen2-VL-2B} affiné par \textit{LoRA} pour la lecture des
+    \textit{champs manuscrits} (montants et bénéficiaire), où l'OCR
+    classique échoue.
+\end{itemize}
+
+Le processus global de traitement d'un chèque se décompose comme suit :
+\begin{enumerate}
+    \item \textbf{Lecture du manuscrit} : l'image complète du chèque est
+    transmise à Qwen2-VL, qui renvoie directement un JSON structuré
+    (montant en chiffres, montant en lettres, bénéficiaire).
+    \item \textbf{Détection des zones} : YOLOv8 localise les trois zones
+    (numéro de compte, signature, CMC7) et en découpe les régions
+    (\textit{crops}).
+    \item \textbf{OCR des zones imprimées} : les régions correspondant au
+    numéro de compte et à la bande CMC7 sont transmises à TrOCR pour
+    l'extraction du texte.
+    \item \textbf{Validation métier} : les données extraites par les deux
+    pipelines sont confrontées à un ensemble de règles produisant une
+    décision structurée.
+\end{enumerate}
+
+Ce découplage permet d'attribuer chaque tâche au modèle le plus adapté :
+un modèle Vision-Langage pour le raisonnement sémantique sur l'écriture
+manuscrite, et un pipeline de détection + OCR léger et rapide pour les
+zones imprimées au gabarit régulier.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection*{Détection des zones par YOLOv8}
+
+\subsubsection{Objectif et classes détectées}
+
+La première brique du système est un modèle YOLOv8 chargé de localiser les
+zones structurées du chèque. Trois classes ont été définies :
+
+\begin{itemize}
+    \item \texttt{num\_compte} — le bloc imprimé contenant le numéro de
+    compte du tireur ;
+    \item \texttt{signature} — la zone de signature, en bas à droite du
+    chèque ;
+    \item \texttt{cmc7} — la ligne magnétique normalisée (CMC7) figurant en
+    bas du chèque, qui encode le numéro de chèque, le code agence et le
+    numéro de compte.
+\end{itemize}
+
+Le choix de YOLOv8 pour ces zones repose sur la même logique que pour la
+CIN : ces champs occupent une position \textbf{stable et géométriquement
+régulière} sur le gabarit du chèque, configuration pour laquelle un
+détecteur basé sur la localisation spatiale est particulièrement performant.
+
+\subsubsection{Génération du dataset synthétique}
+
+À l'image du pipeline CIN, un dataset synthétique a été généré
+automatiquement à partir de templates de chèques représentatifs des
+principales banques marocaines (Attijariwafa Bank, BMCE, BCP, CIH, etc.).
+Pour chaque image générée :
+\begin{itemize}
+    \item des identités, montants et numéros aléatoires ont été générés ;
+    \item les champs ont été positionnés dynamiquement sur les templates ;
+    \item un décalage spatial aléatoire a été appliqué pour simuler la
+    variabilité de numérisation (scan décadré, photo prise à la main) ;
+    \item les \textit{bounding boxes} YOLO des trois classes ont été
+    calculées automatiquement.
+\end{itemize}
+
+Le dataset a été réparti entre les ensembles d'entraînement, de validation
+et de test selon le même découpage que pour la CIN.
+
+\subsubsection{Entraînement du modèle YOLOv8}
+
+Comme pour la CIN, le modèle \textbf{YOLOv8n} (variante nano, $\approx$ 3,2
+millions de paramètres) a été retenu pour son compromis favorable entre
+légèreté et précision sur des objets structurés. L'entraînement a été
+réalisé par \textbf{transfert d'apprentissage} à partir des poids
+pré-entraînés sur le dataset MS COCO, accélérant la convergence et
+réduisant le risque de surapprentissage sur un dataset de taille modeste.
+
+\begin{table}[H]
+\centering
+\label{tab:yolo_cheque_training}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Paramètre} & \textbf{Valeur} \\
+\hline
+Modèle de base        & YOLOv8n (pré-entraîné COCO) \\
+Nombre de classes     & 3 (num\_compte, signature, cmc7) \\
+Nombre d'époques      & 50 \\
+Taille des images     & 640 $\times$ 640 \\
+Batch size            & 8 \\
+Mode AMP              & Activé \\
+Patience (early stopping) & 15 \\
+\hline
+\end{tabular}
+\caption{Configuration d'entraînement du modèle YOLOv8n pour les chèques}
+\end{table}
+
+Le meilleur modèle observé en validation (maximisant le mAP@0.5) est
+sauvegardé sous le nom \texttt{best.pt}, puis utilisé en production
+(\texttt{modele\_final/best.pt}).
+
+\subsubsection{Optimisation de l'inférence}
+
+Plusieurs optimisations ont été mises en place lors de la phase de
+détection (\texttt{extract\_zones}) afin de garantir des temps de réponse
+faibles et des détections fiables :
+
+\begin{itemize}
+    \item \textbf{Suppression des non-maxima (NMS)} : un seuil
+    $\text{IoU} = 0{,}4$ est appliqué pour éviter la double détection d'une
+    même zone. Pour chaque classe, seule la détection de plus forte
+    confiance est conservée.
+    \item \textbf{Découpe en mémoire} : les \textit{crops} produits par YOLO
+    sont conservés sous forme d'objets image en mémoire (PIL), évitant une
+    relecture disque coûteuse avant l'OCR. Une légère marge de 3 pixels est
+    ajoutée autour de chaque boîte pour ne pas tronquer les caractères de
+    bord.
+    \item \textbf{Seuil de confiance} ajustable (\texttt{conf} = 0,25 par
+    défaut) pour filtrer les détections peu fiables.
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection*{Reconnaissance du texte imprimé par TrOCR}
+
+Une fois les zones \texttt{num\_compte} et \texttt{cmc7} localisées par
+YOLOv8, leurs régions sont transmises au modèle \textbf{TrOCR} pour la
+reconnaissance optique des caractères.
+
+La variante retenue est \textbf{\texttt{microsoft/trocr-base-printed}},
+spécialisée dans le texte \textit{imprimé} — par opposition à la variante
+\textit{handwritten}. Ce choix est cohérent avec la nature des zones
+traitées : le numéro de compte et la bande CMC7 sont des champs imprimés à
+police régulière, pour lesquels un modèle entraîné sur du texte machine
+offre la meilleure précision.
+
+\paragraph{Optimisations OCR}
+
+Deux optimisations majeures ont été appliquées pour accélérer l'OCR :
+
+\begin{itemize}
+    \item \textbf{Inférence par lot (batch)} : le numéro de compte et la
+    bande CMC7 sont traités en \textbf{un seul passage} dans TrOCR plutôt
+    qu'image par image, réduisant le surcoût d'appel du modèle.
+    \item \textbf{Décodage glouton} (\textit{greedy decoding},
+    \texttt{num\_beams = 1}) sous \texttt{torch.inference\_mode()}, qui
+    désactive le calcul des gradients et privilégie la vitesse à
+    l'exploration de la recherche par faisceau.
+\end{itemize}
+
+\paragraph{Post-traitement du numéro de compte}
+
+Le texte brut renvoyé par TrOCR pour le numéro de compte est nettoyé : tous
+les caractères non numériques sont supprimés afin de ne conserver que la
+séquence de chiffres, garantissant un format exploitable en aval.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection*{Lecture du manuscrit par modèle Vision-Langage (VLM)}
+
+\subsubsection{Motivation}
+
+Les champs manuscrits du chèque — montant en chiffres, montant en lettres
+et nom du bénéficiaire — constituent le cœur de la difficulté. L'écriture
+manuscrite présente une variabilité considérable (style, inclinaison,
+encre, ratures) que les approches OCR classiques, ainsi qu'un pipeline
+YOLO + TrOCR, peinent à gérer de façon robuste.
+
+Comme pour les justificatifs de domicile, un \textbf{modèle Vision-Langage
+(VLM)} a été retenu pour cette tâche. Plutôt que de localiser puis lire
+chaque champ, le VLM raisonne sur la sémantique globale du chèque et répond
+directement à la question \textit{« quels sont les montants et le
+bénéficiaire de ce chèque ? »}, en produisant un JSON structuré.
+
+\subsubsection{Choix du modèle : Qwen2-VL-2B}
+
+Le modèle retenu est \textbf{Qwen2-VL-2B-Instruct}, développé par Alibaba
+Cloud. La variante 2B (2 milliards de paramètres) a été privilégiée pour :
+\begin{itemize}
+    \item ses capacités multilingues natives, incluant le français, langue
+    des montants en lettres ;
+    \item son architecture Vision-Langage unifiée, qui traite l'image et le
+    texte dans un même espace de représentation ;
+    \item son empreinte mémoire réduite, compatible avec un déploiement sur
+    GPU à VRAM limitée.
+\end{itemize}
+
+Le \textit{prompt} fixe transmis au modèle est formulé en langage naturel :
+\begin{quote}
+\textit{« Lis ce chèque et renvoie UNIQUEMENT un JSON avec les clés
+montant\_chiffre, montant\_lettre, beneficiaire. »}
+\end{quote}
+
+La réponse attendue est un JSON structuré directement exploitable :
+
+\begin{verbatim}
+{
+  "montant_chiffre": "15000",
+  "montant_lettre":  "QUINZE MILLE DIRHAMS",
+  "beneficiaire":    "MOHAMMED ALAOUI"
+}
+\end{verbatim}
+
+\subsubsection{Technique de fine-tuning : LoRA}
+
+Le fine-tuning complet d'un modèle de 2 milliards de paramètres étant
+coûteux et inutile pour une adaptation de domaine, la technique
+\textbf{LoRA} (\textit{Low-Rank Adaptation}) \cite{hu2022lora} a été
+employée. LoRA n'altère pas directement les poids du modèle pré-entraîné :
+elle adjoint de petites matrices d'adaptation de rang réduit ($r = 16$) sur
+les couches d'attention clés (\texttt{q\_proj}, \texttt{k\_proj},
+\texttt{v\_proj}, \texttt{o\_proj}). Seuls ces adaptateurs sont mis à jour
+pendant l'entraînement, ce qui réduit drastiquement la consommation mémoire
+et le temps de calcul tout en préservant les connaissances générales du
+modèle.
+
+La quantisation \textbf{4-bit NF4} (NormalFloat4), appliquée via la
+bibliothèque BitsAndBytes avec un \texttt{compute\_dtype} en bfloat16,
+compresse les poids du modèle de base en mémoire sans dégradation notable
+des performances.
+
+\begin{table}[H]
+\centering
+\label{tab:vlm_cheque_config}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Paramètre} & \textbf{Valeur} \\
+\hline
+Modèle de base            & Qwen2-VL-2B-Instruct          \\
+Quantisation              & 4-bit NF4 (bfloat16)          \\
+Technique d'adaptation    & LoRA ($r=16$, $\alpha=32$)    \\
+Couches ciblées           & q\_proj, k\_proj, v\_proj, o\_proj \\
+LoRA dropout              & 0,05                          \\
+\hline
+\end{tabular}
+\caption{Configuration du fine-tuning du modèle Qwen2-VL-2B pour les chèques}
+\end{table}
+
+L'adaptateur final est stocké dans le dossier
+\texttt{cheque\_qwen\_lora\_final/} et chargé à la volée par-dessus le
+modèle de base au moment de l'inférence.
+
+\subsubsection{Optimisation de l'inférence}
+
+La génération du JSON s'effectue sous \texttt{torch.inference\_mode()} avec
+un décodage glouton (\texttt{do\_sample = False}, \texttt{num\_beams = 1})
+borné à 128 nouveaux tokens. La réponse textuelle est ensuite parsée par
+une expression régulière qui extrait le bloc JSON, garantissant la
+robustesse face à d'éventuels préambules ou commentaires générés par le
+modèle.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection*{Validation métier}
+
+Une fois les deux pipelines exécutés (manuscrit + zones), l'ensemble des
+données extraites est confronté à un module de validation métier
+(\texttt{tools/validator.py}) qui produit une décision structurée. Les
+contrôles portent sur :
+\begin{itemize}
+    \item la présence du montant en chiffres et du montant en lettres ;
+    \item la présence du nom du bénéficiaire ;
+    \item la détection \textbf{et} la lisibilité du numéro de compte ;
+    \item la détection de la bande CMC7 et sa lisibilité ;
+    \item la présence de la signature.
+\end{itemize}
+
+La décision finale est déterminée par le nombre d'anomalies relevées :
+
+\begin{table}[H]
+\centering
+\label{tab:validation_cheque}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Statut} & \textbf{Condition} \\
+\hline
+\texttt{VALIDE}                  & Aucune anomalie : tous les champs présents et lisibles \\
+\texttt{À VÉRIFIER MANUELLEMENT} & 1 ou 2 anomalies (contrôle opérateur) \\
+\texttt{REJETÉ}                  & 3 anomalies ou plus, ou échec d'extraction en amont \\
+\hline
+\end{tabular}
+\caption{Règles de décision de la validation métier du chèque}
+\end{table}
+
+Ce mécanisme s'inscrit dans la logique \textit{Human-in-the-Loop} du
+système : les cas incertains ne sont jamais validés ni rejetés
+automatiquement, mais routés vers un opérateur humain pour contrôle.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection*{Synthèse de l'architecture}
+
+Le tableau ci-dessous récapitule la répartition des tâches entre les trois
+modèles du pipeline chèque.
+
+\begin{table}[H]
+\centering
+\label{tab:synthese_cheque}
+\begin{tabular}{|p{3.0cm}|p{3.4cm}|p{4.2cm}|p{2.4cm}|}
+\hline
+\textbf{Modèle} & \textbf{Tâche} & \textbf{Champs} & \textbf{Type} \\
+\hline
+YOLOv8n &
+Détection des zones &
+num\_compte, signature, cmc7 &
+Localisation \\
+\hline
+TrOCR (printed) &
+OCR du texte imprimé &
+num\_compte, cmc7 &
+Reconnaissance \\
+\hline
+Qwen2-VL-2B + LoRA &
+Lecture du manuscrit &
+montant\_chiffre, montant\_lettre, beneficiaire &
+Vision-Langage \\
+\hline
+\end{tabular}
+\caption{Répartition des tâches entre les trois modèles du pipeline chèque}
+\end{table}
+
+Cette architecture hybride tire parti des forces de chaque famille de
+modèles : la rapidité et la précision spatiale de YOLOv8 sur les zones
+gabariées, l'efficacité de TrOCR sur le texte imprimé régulier, et la
+capacité de raisonnement sémantique de Qwen2-VL sur l'écriture manuscrite.
+L'ensemble est orchestré pour minimiser l'empreinte mémoire (modèles
+chargés en singletons et libérables à la demande) et le temps d'inférence
+(découpe en mémoire, OCR batché, décodage glouton sous
+\texttt{inference\_mode}), garantissant un traitement de bout en bout fiable
+et exploitable directement par le back-office.

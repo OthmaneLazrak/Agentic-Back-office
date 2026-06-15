@@ -1,0 +1,83 @@
+% =====================================================================
+%  Diagramme de Gantt du projet  (mi-février -> mi-août 2026)
+%  Soutenance : mi-juillet  |  Finalisation post-soutenance : août
+%
+%  PRÉREQUIS dans le préambule (à ajouter une seule fois) :
+%      \usepackage{pgfgantt}
+%  Les couleurs attijariRed / emsidark sont déjà définies dans ton main.tex.
+%  Échelle : 1 unité = 1 quinzaine (demi-mois). 12 unités = mi-fév -> mi-août.
+%
+%  Astuce mise en page :
+%   - largeur des colonnes  : modifie  x unit
+%   - hauteur des lignes     : modifie  y unit chart
+%   - si ça dépasse la marge : baisse  x unit  (ex. 0.8cm) ou raccourcis les libellés
+% =====================================================================
+
+% --- Légende des tâches (à placer juste avant le diagramme) ---
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|c|X|}
+\hline
+\textbf{Tâche} & \textbf{Description} \\
+\hline
+T1 & Étude du contexte et analyse des besoins \\
+T2 & Analyse et conception (UML, architecture) \\
+T3 & Préparation des données et entraînement des modèles (YOLOv8, TrOCR, Qwen2-VL) \\
+T4 & Développement du module KYC (CIN, justificatifs) \\
+T5 & Développement du module Chèque \\
+T6 & Intégration back-end (Spring) et front-end (React) \\
+T7 & Tests et validation \\
+T8 & Rédaction du rapport \\
+T9 & Corrections post-soutenance et finalisation \\
+\hline
+\end{tabularx}
+\caption{Légende des tâches du diagramme de Gantt}
+\label{tab:gantt_taches}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{ganttchart}[
+        x unit=0.92cm,
+        y unit chart=0.62cm,
+        y unit title=0.7cm,
+        hgrid, vgrid,
+        canvas/.append style={draw=black!40},
+        bar height=0.55,
+        bar/.append style={fill=attijariRed!75, draw=attijariRed!90},
+        bar label font=\footnotesize,
+        milestone/.append style={fill=emsidark, draw=emsidark},
+        milestone label font=\footnotesize\bfseries,
+        title/.append style={fill=emsidark!15},
+        title label font=\footnotesize\bfseries,
+    ]{1}{12}
+
+    % --- Ligne des mois ---
+    \gantttitle{2026}{12} \\
+    \gantttitle{Fév}{1}
+    \gantttitle{Mars}{2}
+    \gantttitle{Avr}{2}
+    \gantttitle{Mai}{2}
+    \gantttitle{Juin}{2}
+    \gantttitle{Juil}{2}
+    \gantttitle{Aoû}{1} \\
+
+    % --- Tâches (voir légende, tableau~\ref{tab:gantt_taches}) ---
+    \ganttbar{T1}{1}{2} \\
+    \ganttbar{T2}{2}{3} \\
+    \ganttbar{T3}{3}{5} \\
+    \ganttbar{T4}{4}{6} \\
+    \ganttbar{T5}{6}{8} \\
+    \ganttbar{T6}{7}{9} \\
+    \ganttbar{T7}{8}{9} \\
+    \ganttbar{T8}{8}{10} \\
+    \ganttmilestone{Soutenance}{10} \\
+    \ganttbar{T9}{11}{12}
+
+    \end{ganttchart}%
+    }
+    \caption{Diagramme de Gantt du projet}
+    \label{fig:gantt}
+\end{figure}

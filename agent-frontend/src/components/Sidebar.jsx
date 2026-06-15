@@ -6,7 +6,8 @@ const NAV_MAIN = [
   { id: "dashboard",  icon: "▦", label: "Dashboard" },
   { id: "kyc",        icon: "◈", label: "Vérification KYC", roles: [ROLES.FRONT_OFFICE] },
   { id: "cheque",     icon: "▤", label: "Vérification Chèque", roles: [ROLES.FRONT_OFFICE] },
-  { id: "backoffice", icon: "▣", label: "Back Office",  roles: [ROLES.BACK_OFFICE] },
+  { id: "backoffice-kyc",    icon: "◈", label: "Back Office KYC",    roles: [ROLES.BACK_OFFICE] },
+  { id: "backoffice-cheque", icon: "▤", label: "Back Office Chèque", roles: [ROLES.BACK_OFFICE] },
   { id: "historique", icon: "◷", label: "Historique", roles: [ROLES.FRONT_OFFICE, ROLES.BACK_OFFICE] },
   { id: "admin",      icon: "✪", label: "Administration", roles: [ROLES.ADMIN] },
 ];
